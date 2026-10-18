@@ -206,6 +206,7 @@ On **first start** the gateway automatically creates `~/.token-free-gateway/conf
 ```json
 {
   "port": 3456,
+  "host": "127.0.0.1",
   "apiKey": "",
   "cdpUrl": "http://127.0.0.1:9222",
   "requestTimeoutSec": 300
@@ -217,6 +218,7 @@ Edit the fields you want to change and leave the rest as-is.
 | Field               | Default                 | Description                                              |
 | ------------------- | ----------------------- | -------------------------------------------------------- |
 | `port`              | `3456`                  | Server listen port                                       |
+| `host`              | `127.0.0.1`             | Listen address; use `0.0.0.0` to expose on the network (set `apiKey` first) |
 | `apiKey`            | `""` (disabled)         | Bearer token for client auth; empty = no auth            |
 | `cdpUrl`            | `http://127.0.0.1:9222` | Chrome DevTools Protocol endpoint                        |
 | `requestTimeoutSec` | `300`                   | Per-request timeout (seconds) for `/v1/chat/completions` |
@@ -228,6 +230,7 @@ All variables use the `TFG_` prefix to avoid conflicts with other software.
 | Variable                  | Default                 | Description                                              |
 | ------------------------- | ----------------------- | -------------------------------------------------------- |
 | `TFG_PORT`                | `3456`                  | Server listen port                                       |
+| `TFG_HOST`                | `127.0.0.1`             | Listen address (overrides `host`) |
 | `TFG_API_KEY`             | `""` (disabled)         | Bearer token for client auth; empty = no auth            |
 | `TFG_CDP_URL`             | `http://127.0.0.1:9222` | Chrome DevTools Protocol endpoint                        |
 | `TFG_REQUEST_TIMEOUT_SEC` | `300`                   | Per-request timeout (seconds) for `/v1/chat/completions` |

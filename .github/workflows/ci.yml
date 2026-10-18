@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mail-hub:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mail-hub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mail-hub/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+
+  universal-registrar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: universal-registrar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: universal-registrar/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  token-free-gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: token-free-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun test
+
+  wa-app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wa-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: wa-app/go.mod
+          cache-dependency-path: wa-app/go.sum
+      - name: Install protoc and plugins
+        run: |
+          sudo apt-get update && sudo apt-get install -y protobuf-compiler
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+      - name: Generate protobuf code
+        run: sh scripts/generate-proto.sh
+      # lint-go.sh (gofmt) is skipped until the CRLF Go sources are renormalized to LF.
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test ./...

@@ -150,6 +150,7 @@ async function handleModelByIdRoute(modelId: string): Promise<Response> {
 // ── Server bootstrap ─────────────────────────────────────────
 
 const server = Bun.serve({
+	hostname: config.host,
 	port: config.port,
 	fetch: handleRequest,
 	// Disable Bun's built-in idle timeout (default 10s).
@@ -158,8 +159,11 @@ const server = Bun.serve({
 });
 
 const authorized = listAuthorizedProviders();
-console.log(`Token-Free Gateway listening on http://localhost:${server.port}`);
+console.log(`Token-Free Gateway listening on http://${config.host}:${server.port}`);
 console.log(`Auth: ${config.gatewayApiKey ? "enabled (Bearer token)" : "disabled"}`);
+if (!config.gatewayApiKey && !["127.0.0.1", "localhost", "::1"].includes(config.host)) {
+	console.warn(`WARNING: listening on ${config.host} without TFG_API_KEY — anyone on the network can use this gateway.`);
+}
 console.log(`Request timeout: ${config.requestTimeoutSec}s`);
 console.log(
 	`Authorized providers: ${authorized.length > 0 ? authorized.join(", ") : "none — run 'token-free-gateway webauth' to authorize"}`,

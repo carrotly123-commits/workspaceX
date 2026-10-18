@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 
 export interface GatewayConfig {
 	port: number;
+	host: string;
 	gatewayApiKey: string | undefined;
 	cdpUrl: string;
 	/** Per-request timeout in seconds for the /v1/chat/completions route. */
@@ -12,6 +13,7 @@ export interface GatewayConfig {
 
 interface ConfigFile {
 	port?: number;
+	host?: string;
 	apiKey?: string;
 	cdpUrl?: string;
 	requestTimeoutSec?: number;
@@ -19,6 +21,7 @@ interface ConfigFile {
 
 const DEFAULTS: Required<ConfigFile> = {
 	port: 3456,
+	host: "127.0.0.1",
 	apiKey: "",
 	cdpUrl: "http://127.0.0.1:9222",
 	requestTimeoutSec: 300,
@@ -84,7 +87,9 @@ export function loadConfig(): GatewayConfig {
 	const file = loadConfigFile();
 	return {
 		port: Number.parseInt(process.env.TFG_PORT ?? String(file.port ?? DEFAULTS.port), 10),
-		gatewayApiKey: (process.env.TFG_API_KEY ?? file.apiKey ?? DEFAULTS.apiKey) || undefined,
+		host: process.env.TFG_HOST?.trim() || file.host?.trim() || DEFAULTS.host,
+		// `||` rather than `??`: an empty TFG_API_KEY (e.g. exported from .env) must not mask file.apiKey.
+		gatewayApiKey: process.env.TFG_API_KEY?.trim() || file.apiKey?.trim() || undefined,
 		cdpUrl: process.env.TFG_CDP_URL ?? file.cdpUrl ?? DEFAULTS.cdpUrl,
 		requestTimeoutSec: Number.parseInt(
 			process.env.TFG_REQUEST_TIMEOUT_SEC ??

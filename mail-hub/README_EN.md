@@ -70,7 +70,7 @@ pm2 start ecosystem.config.cjs
 |----------|----------|---------|-------------|
 | `API_SECRET` | Recommended | — | Admin secret. Leave empty to grant admin to all requests (dev only) |
 | `PORT` | No | `3100` | Server port |
-| `HOST` | No | `0.0.0.0` | Listen address |
+| `HOST` | No | `127.0.0.1` | Listen address; a non-loopback value (e.g. `0.0.0.0`) requires a non-placeholder `API_SECRET` or startup fails |
 | `DB_PATH` | No | `./data/mail.db` | SQLite database path |
 | `PROXY_URL` | No | — | Outbound proxy, supports http/https/socks5 |
 

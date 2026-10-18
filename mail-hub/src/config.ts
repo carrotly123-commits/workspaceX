@@ -22,6 +22,13 @@ export interface ConfigValidationResult {
 
 const log = createLogger('config');
 
+export const PLACEHOLDER_API_SECRET = 'change-me-to-a-random-string';
+
+export function isLoopbackHost(host: string): boolean {
+  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return h === 'localhost' || h === '::1' || /^127(\.\d{1,3}){3}$/.test(h);
+}
+
 function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
   if (value === undefined || value === '') return defaultValue;
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
@@ -35,7 +42,7 @@ function parseNumber(value: string | undefined, defaultValue: number): number {
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   return {
     port: parseInt(env.PORT || '3100', 10),
-    host: env.HOST || '0.0.0.0',
+    host: env.HOST || '127.0.0.1',
     apiSecret: env.API_SECRET || '',
     dbPath: env.DB_PATH || './data/mail.db',
     proxyUrl: env.PROXY_URL || '',
@@ -84,8 +91,13 @@ export function validateConfig(appConfig: AppConfig): ConfigValidationResult {
     errors.push('REQUEST_LOG_SLOW_MS must be a non-negative number');
   }
 
-  if (!appConfig.apiSecret) {
+  const weakSecret = !appConfig.apiSecret || appConfig.apiSecret === PLACEHOLDER_API_SECRET;
+  if (weakSecret && appConfig.host.trim() && !isLoopbackHost(appConfig.host)) {
+    errors.push(`API_SECRET must be set to a non-placeholder value when HOST (${appConfig.host}) is not a loopback address`);
+  } else if (!appConfig.apiSecret) {
     warnings.push('API_SECRET is empty; all API routes will run with admin access');
+  } else if (appConfig.apiSecret === PLACEHOLDER_API_SECRET) {
+    warnings.push('API_SECRET is still the example placeholder; change it to a random string');
   }
 
   return { errors, warnings };
