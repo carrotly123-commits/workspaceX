@@ -1,0 +1,297 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "ByteVForge.WaApp.V1";
+option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option java_multiple_files = true;
+option java_outer_classname = "WaAppRegistrationProto";
+option java_package = "com.bytevforge.waapp.v1";
+option php_namespace = "ByteVForge\\WaApp\\V1";
+
+service WaRegistrationService {
+  rpc ProbeAccount(ProbeAccountRequest) returns (ProbeAccountResponse);
+  rpc RequestVerificationCode(RequestVerificationCodeRequest) returns (RequestVerificationCodeResponse);
+  rpc RefreshAccountTransferChallenge(RefreshAccountTransferChallengeRequest) returns (RefreshAccountTransferChallengeResponse);
+  rpc SubmitVerificationCode(SubmitVerificationCodeRequest) returns (SubmitVerificationCodeResponse);
+  rpc GetRegistration(GetRegistrationRequest) returns (GetRegistrationResponse);
+  rpc GetLoginState(GetLoginStateRequest) returns (GetLoginStateResponse);
+  rpc GetActiveLoginState(GetActiveLoginStateRequest) returns (GetActiveLoginStateResponse);
+  rpc CheckLoginState(CheckLoginStateRequest) returns (CheckLoginStateResponse);
+}
+
+enum AccountProbeStatus {
+  ACCOUNT_PROBE_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_PROBE_STATUS_UNKNOWN = 1;
+  ACCOUNT_PROBE_STATUS_REACHABLE = 2;
+  ACCOUNT_PROBE_STATUS_UNREACHABLE = 3;
+  ACCOUNT_PROBE_STATUS_REJECTED = 4;
+}
+
+enum VerificationDeliveryMethod {
+  VERIFICATION_DELIVERY_METHOD_UNSPECIFIED = 0;
+  VERIFICATION_DELIVERY_METHOD_SMS = 1;
+  VERIFICATION_DELIVERY_METHOD_VOICE = 2;
+  VERIFICATION_DELIVERY_METHOD_IN_APP_MESSAGE = 3;
+  VERIFICATION_DELIVERY_METHOD_FLASH = 4;
+  VERIFICATION_DELIVERY_METHOD_WA_OLD = 5;
+  VERIFICATION_DELIVERY_METHOD_EMAIL_OTP = 6;
+  VERIFICATION_DELIVERY_METHOD_PASSKEY = 7;
+  VERIFICATION_DELIVERY_METHOD_SILENT_AUTH = 8;
+  VERIFICATION_DELIVERY_METHOD_SILENT_AUTH_TS43 = 9;
+  VERIFICATION_DELIVERY_METHOD_RECAPTCHA = 10;
+  VERIFICATION_DELIVERY_METHOD_OAUTH_EMAIL = 11;
+  VERIFICATION_DELIVERY_METHOD_DISCOVERABLE_CREDENTIAL = 12;
+  VERIFICATION_DELIVERY_METHOD_ACCOUNT_TRANSFER = 13;
+  VERIFICATION_DELIVERY_METHOD_STANDALONE_APP = 14;
+  VERIFICATION_DELIVERY_METHOD_SEND_SMS = 15;
+  VERIFICATION_DELIVERY_METHOD_AUTOCONF = 16;
+  VERIFICATION_DELIVERY_METHOD_DEEPLINK_OTP = 17;
+}
+
+enum RegistrationLoginMethod {
+  REGISTRATION_LOGIN_METHOD_UNSPECIFIED = 0;
+  REGISTRATION_LOGIN_METHOD_SMS = 1;
+  REGISTRATION_LOGIN_METHOD_VOICE = 2;
+  REGISTRATION_LOGIN_METHOD_FLASH = 3;
+  REGISTRATION_LOGIN_METHOD_WA_OLD = 4;
+  REGISTRATION_LOGIN_METHOD_EMAIL_OTP = 5;
+  REGISTRATION_LOGIN_METHOD_SEND_SMS = 6;
+  REGISTRATION_LOGIN_METHOD_SILENT_AUTH = 7;
+  REGISTRATION_LOGIN_METHOD_SILENT_AUTH_TS43 = 8;
+  REGISTRATION_LOGIN_METHOD_AUTOCONF = 9;
+  REGISTRATION_LOGIN_METHOD_DEEPLINK_OTP = 10;
+  REGISTRATION_LOGIN_METHOD_ACCOUNT_TRANSFER = 11;
+  REGISTRATION_LOGIN_METHOD_PASSKEY = 12;
+  REGISTRATION_LOGIN_METHOD_DISCOVERABLE_CREDENTIAL = 13;
+  REGISTRATION_LOGIN_METHOD_OAUTH_EMAIL = 14;
+  REGISTRATION_LOGIN_METHOD_RECAPTCHA = 15;
+  REGISTRATION_LOGIN_METHOD_TWO_FACTOR_PIN = 16;
+  REGISTRATION_LOGIN_METHOD_PASSWORD = 17;
+  REGISTRATION_LOGIN_METHOD_WIPE_FULL = 18;
+  REGISTRATION_LOGIN_METHOD_WIPE_OFFLINE = 19;
+}
+
+enum VerificationRequestStatus {
+  VERIFICATION_REQUEST_STATUS_UNSPECIFIED = 0;
+  VERIFICATION_REQUEST_STATUS_REQUESTED = 1;
+  VERIFICATION_REQUEST_STATUS_SENT = 2;
+  VERIFICATION_REQUEST_STATUS_WAITING = 3;
+  VERIFICATION_REQUEST_STATUS_REJECTED = 4;
+  VERIFICATION_REQUEST_STATUS_EXPIRED = 5;
+}
+
+enum RegistrationStatus {
+  REGISTRATION_STATUS_UNSPECIFIED = 0;
+  REGISTRATION_STATUS_PENDING_CODE = 1;
+  REGISTRATION_STATUS_SUBMITTED = 2;
+  REGISTRATION_STATUS_REGISTERED = 3;
+  REGISTRATION_STATUS_REJECTED = 4;
+  REGISTRATION_STATUS_EXPIRED = 5;
+}
+
+enum LoginStateStatus {
+  LOGIN_STATE_STATUS_UNSPECIFIED = 0;
+  LOGIN_STATE_STATUS_ACTIVE = 1;
+  LOGIN_STATE_STATUS_INVALID = 2;
+  LOGIN_STATE_STATUS_REVOKED = 3;
+}
+
+enum LoginStateCheckStatus {
+  LOGIN_STATE_CHECK_STATUS_UNSPECIFIED = 0;
+  LOGIN_STATE_CHECK_STATUS_ACTIVE = 1;
+  LOGIN_STATE_CHECK_STATUS_INVALID = 2;
+  LOGIN_STATE_CHECK_STATUS_UNREACHABLE = 3;
+}
+
+message AccountProbe {
+  string account_probe_id = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  AccountProbeStatus status = 4;
+  repeated VerificationDeliveryMethod supported_methods = 5;
+  google.protobuf.Timestamp probed_at = 6;
+  WaError last_error = 7;
+  repeated VerificationMethodStatus method_statuses = 8;
+}
+
+message VerificationMethodStatus {
+  VerificationDeliveryMethod delivery_method = 1;
+  bool available = 2;
+  google.protobuf.Duration cooldown = 3;
+}
+
+message VerificationCodeRequestRecord {
+  string verification_request_id = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  VerificationDeliveryMethod delivery_method = 4;
+  VerificationRequestStatus status = 5;
+  int32 expected_code_length = 6;
+  google.protobuf.Timestamp requested_at = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  WaError last_error = 9;
+  google.protobuf.Duration retry_after = 10;
+  repeated VerificationMethodStatus method_statuses = 11;
+}
+
+message AccountTransferChallenge {
+  string verification_request_id = 1;
+  int32 code_count = 2;
+  int32 current_code_index = 3;
+  int32 current_code_length = 4;
+  google.protobuf.Duration rotation_interval = 5;
+  google.protobuf.Timestamp requested_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  // Sensitive QR/deeplink payload. It carries the current account-transfer token.
+  SensitiveText qr_deeplink = 8;
+}
+
+message RegisteredIdentity {
+  string registered_identity_id = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  string service_account_id = 4;
+  string service_login_id = 5;
+  google.protobuf.Timestamp registered_at = 6;
+}
+
+message RegistrationRecord {
+  string registration_id = 1;
+  string verification_request_id = 2;
+  string wa_account_id = 3;
+  string client_profile_id = 4;
+  RegistrationStatus status = 5;
+  RegisteredIdentity identity = 6;
+  google.protobuf.Timestamp submitted_at = 7;
+  google.protobuf.Timestamp completed_at = 8;
+  WaError last_error = 9;
+}
+
+message LoginState {
+  string login_state_id = 1;
+  string registration_id = 2;
+  string wa_account_id = 3;
+  string client_profile_id = 4;
+  string registered_identity_id = 5;
+  string service_account_id = 6;
+  string service_login_id = 7;
+  LoginStateStatus status = 8;
+  google.protobuf.Timestamp registered_at = 9;
+  google.protobuf.Timestamp last_verified_at = 10;
+  AuditStamp audit = 11;
+  WaError last_error = 12;
+}
+
+message LoginStateCheck {
+  string login_state_check_id = 1;
+  string login_state_id = 2;
+  string wa_account_id = 3;
+  string client_profile_id = 4;
+  string registered_identity_id = 5;
+  LoginStateCheckStatus status = 6;
+  google.protobuf.Timestamp checked_at = 7;
+  WaError error = 8;
+}
+
+message ProbeAccountRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  string protocol_profile_id = 4;
+}
+
+message ProbeAccountResponse {
+  AccountProbe probe = 1;
+  WaError error = 2;
+}
+
+message RequestVerificationCodeRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  string protocol_profile_id = 4;
+  VerificationDeliveryMethod delivery_method = 5;
+}
+
+message RequestVerificationCodeResponse {
+  VerificationCodeRequestRecord verification_request = 1;
+  WaError error = 2;
+  AccountTransferChallenge account_transfer_challenge = 3;
+}
+
+message SubmitVerificationCodeRequest {
+  RequestContext context = 1;
+  string verification_request_id = 2;
+  oneof submitted_code {
+    // Sensitive. Do not log or persist as plaintext outside the authorized registration operation.
+    string code = 3;
+    string code_secret_ref = 4;
+  }
+}
+
+message RefreshAccountTransferChallengeRequest {
+  RequestContext context = 1;
+  string verification_request_id = 2;
+}
+
+message RefreshAccountTransferChallengeResponse {
+  AccountTransferChallenge account_transfer_challenge = 1;
+  WaError error = 2;
+}
+
+message SubmitVerificationCodeResponse {
+  RegistrationRecord registration = 1;
+  WaError error = 2;
+  LoginState login_state = 3;
+}
+
+message GetRegistrationRequest {
+  RequestContext context = 1;
+  string registration_id = 2;
+}
+
+message GetRegistrationResponse {
+  RegistrationRecord registration = 1;
+  WaError error = 2;
+}
+
+message GetLoginStateRequest {
+  RequestContext context = 1;
+  string login_state_id = 2;
+}
+
+message GetLoginStateResponse {
+  LoginState login_state = 1;
+  WaError error = 2;
+}
+
+message GetActiveLoginStateRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+}
+
+message GetActiveLoginStateResponse {
+  LoginState login_state = 1;
+  WaError error = 2;
+}
+
+message CheckLoginStateRequest {
+  RequestContext context = 1;
+  string login_state_id = 2;
+  string wa_account_id = 3;
+  string client_profile_id = 4;
+  string registered_identity_id = 5;
+  google.protobuf.Duration remote_timeout = 6;
+}
+
+message CheckLoginStateResponse {
+  LoginState login_state = 1;
+  LoginStateCheck check = 2;
+  WaError error = 3;
+}

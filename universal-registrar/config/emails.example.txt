@@ -1,0 +1,5 @@
+# One email per line. Optional mailbox password after colon.
+# Lines starting with # are ignored.
+#
+# user1@example.com
+# user2@example.com:mailbox-password

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.token-free-gateway/
+.universal-registrar/
+data/
+*.log
+.env
+config/config.json
+config/emails.txt
+config/emails.txt.used
+bun.lockb

@@ -1,0 +1,67 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  baseline:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package and test deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-test.txt
+
+      - name: Run fast tests
+        run: python -m pytest -m fast -q
+
+      - name: Install Firefox 151
+        shell: powershell
+        run: |
+          # CI 第一阶段固定使用官方 Firefox 151。
+          # 指纹浏览器 151 更适合作为手工发版验证环境，不强耦合到公共 runner。
+          $url = "https://download-installer.cdn.mozilla.net/pub/firefox/releases/151.0/win64/zh-CN/Firefox%20Setup%20151.0.exe"
+          $installer = "$env:RUNNER_TEMP\firefox-151.exe"
+          Invoke-WebRequest -Uri $url -OutFile $installer
+          Start-Process -FilePath $installer -ArgumentList '/S' -Wait
+          if (-not (Test-Path 'C:\Program Files\Mozilla Firefox\firefox.exe')) {
+            throw 'Firefox 151 install failed'
+          }
+
+      - name: Set Firefox path for tests
+        shell: powershell
+        run: |
+          "RUYIPAGE_TEST_FIREFOX_PATH=C:\Program Files\Mozilla Firefox\firefox.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run smoke tests
+        run: python -m pytest tests/smoke -m browser -q
+
+      - name: Run feature tests
+        run: python -m pytest tests/features -m browser -q
+
+      - name: Run async browser smoke tests
+        run: python -m pytest tests/async_smoke/test_async_smoke.py -m browser -q
+
+      - name: Run integration tests
+        run: python -m pytest tests/integration -m browser -q
+
+      - name: Run release gate
+        run: python -m pytest tests/release -m browser -q

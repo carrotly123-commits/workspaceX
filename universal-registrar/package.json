@@ -1,0 +1,28 @@
+{
+  "name": "universal-registrar",
+  "version": "1.0.0",
+  "description": "Plugin-based multi-platform account registration toolkit for AI web providers (works with token-free-gateway)",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "universal-registrar": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "register": "tsx src/index.ts register",
+    "list": "tsx src/index.ts list",
+    "export": "tsx src/index.ts export",
+    "platforms": "tsx src/index.ts platforms",
+    "doctor": "tsx src/index.ts doctor",
+    "capture": "tsx src/index.ts capture",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.1",
+    "typescript": "^5"
+  }
+}

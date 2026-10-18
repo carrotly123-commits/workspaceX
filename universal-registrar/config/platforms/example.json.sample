@@ -1,0 +1,20 @@
+{
+  "id": "example-site",
+  "name": "Example Site (template)",
+  "signupUrl": "https://example.com/signup",
+  "domains": ["example.com"],
+  "preferredMode": "semi",
+  "needsEmail": true,
+  "needsPhone": false,
+  "tips": "Copy this file and adjust selectors for your target site.",
+  "selectors": {
+    "openSignup": ["a[href*='signup']", "button:has-text('Sign up')"],
+    "email": ["#email", "input[name='email']", "input[type='email']"],
+    "password": ["#password", "input[name='password']", "input[type='password']"],
+    "name": ["#name", "input[name='name']"],
+    "submit": ["button[type='submit']", "button:has-text('Sign up')"],
+    "code": ["input[name='code']", "input[autocomplete='one-time-code']"]
+  },
+  "successCookie": "session",
+  "emailFromHint": "example.com"
+}

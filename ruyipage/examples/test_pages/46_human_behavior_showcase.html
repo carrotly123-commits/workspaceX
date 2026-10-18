@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ruyiPage Human Behavior Showcase</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1220;
+      --panel: rgba(20, 25, 44, 0.88);
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #eef2ff;
+      --muted: #a3acc7;
+      --accent: #7c9cff;
+      --accent-2: #59e1c6;
+      --accent-3: #ffcc66;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(124, 156, 255, 0.18), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(89, 225, 198, 0.14), transparent 24%),
+        linear-gradient(160deg, #090b14 0%, #0f1220 38%, #12182c 100%);
+      color: var(--text);
+    }
+
+    .wrap {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 24px auto;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 20px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.24);
+    }
+
+    .hero {
+      padding: 28px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--accent-2);
+      border: 1px solid rgba(89, 225, 198, 0.25);
+      background: rgba(89, 225, 198, 0.08);
+    }
+
+    h1 {
+      margin: 18px 0 10px;
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: 1.06;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 15px;
+      max-width: 700px;
+    }
+
+    .cards {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .mini {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .mini b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .mini span {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .workbench {
+      padding: 22px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .toolbar .group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .chip {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 500px;
+      padding: 18px;
+      border-radius: 22px;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)),
+        rgba(9, 12, 22, 0.72);
+      overflow: hidden;
+    }
+
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+      background-size: 24px 24px;
+      mask-image: linear-gradient(180deg, rgba(255,255,255,0.7), transparent);
+      pointer-events: none;
+    }
+
+    .targets {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 90px;
+    }
+
+    .target {
+      padding: 20px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+
+    .target:hover {
+      transform: translateY(-2px);
+      border-color: rgba(124, 156, 255, 0.38);
+      background: rgba(124, 156, 255, 0.08);
+    }
+
+    .target h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .target p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .target button,
+    .control button {
+      cursor: pointer;
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #07101e;
+      background: linear-gradient(135deg, var(--accent), #a9bdfd);
+      box-shadow: 0 8px 24px rgba(124, 156, 255, 0.24);
+    }
+
+    .target button.alt {
+      background: linear-gradient(135deg, var(--accent-2), #7ef0d7);
+      box-shadow: 0 8px 24px rgba(89, 225, 198, 0.22);
+    }
+
+    .control {
+      display: grid;
+      gap: 12px;
+      padding: 20px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    textarea { min-height: 110px; resize: vertical; }
+
+    .notes {
+      padding: 20px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .note {
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.06);
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--muted);
+    }
+
+    @media (max-width: 960px) {
+      .wrap { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: 1fr; }
+      .targets { grid-template-columns: 1fr; margin-top: 48px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="panel hero">
+      <div class="eyebrow">Example 46 · Human Behavior Showcase</div>
+      <h1>拟人轨迹算法演示页</h1>
+      <p class="subtitle">
+        这个页面专门给 `ruyiPage` 的 `human_move()` / `human_click()` / `human_type()` 做演示。
+        建议配合 `action_visual=True` 使用，这样可以直接在页面上看到鼠标轨迹、点击扩散和键盘输入提示。
+      </p>
+
+      <div class="cards">
+        <div class="mini">
+          <b>Bezier</b>
+          <span>更平滑，适合大多数常规网页操作。支持 `line`、`arc`、`line_then_arc` 等风格。</span>
+        </div>
+        <div class="mini">
+          <b>WindMouse</b>
+          <span>加入风力扰动和重力收敛，轨迹更像真人拖动鼠标时的自然摆动。</span>
+        </div>
+        <div class="mini">
+          <b>Action Visual</b>
+          <span>演示时建议打开鼠标行为可视化，这样最容易直观看出两套算法的差别。</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel workbench">
+      <div class="toolbar">
+        <div class="group">
+          <div class="chip">推荐：用 `opts.set_human_algorithm(...)` 配全局默认值</div>
+          <div class="chip">单次动作也可用 `algorithm=` 覆盖</div>
+        </div>
+        <div class="group">
+          <div class="chip">窗口内多点位</div>
+          <div class="chip">输入区 + 点击区</div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="grid"></div>
+
+        <div class="targets">
+          <div class="target" id="card-a">
+            <div>
+              <h3>轨迹目标 A</h3>
+              <p>适合演示长距离移动和点击，建议分别切换 `bezier` / `windmouse` 对比。</p>
+            </div>
+            <button id="target-a">点击我</button>
+          </div>
+
+          <div class="target" id="card-b">
+            <div>
+              <h3>轨迹目标 B</h3>
+              <p>适合做第二段位移，看看不同算法在连续动作中的路径差异。</p>
+            </div>
+            <button id="target-b" class="alt">再点一次</button>
+          </div>
+
+          <div class="control panel">
+            <div class="field">
+              <label for="search-input">搜索输入框</label>
+              <input id="search-input" placeholder="这里适合演示 human_click + human_type" />
+            </div>
+            <div class="field">
+              <label for="algo-select">页面内算法说明</label>
+              <select id="algo-select">
+                <option>Bezier：平滑弧线 + 抖动</option>
+                <option>WindMouse：风力扰动 + 重力收敛</option>
+              </select>
+            </div>
+            <button id="submit-btn">提交演示表单</button>
+          </div>
+
+          <div class="control panel">
+            <div class="field">
+              <label for="note-area">备注区</label>
+              <textarea id="note-area" placeholder="可以让 AI 用 human_type() 输入一段话，再切到按钮点击。"></textarea>
+            </div>
+            <div class="field">
+              <label for="status-box">当前状态</label>
+              <input id="status-box" value="等待 ruyiPage 演示动作..." readonly />
+            </div>
+            <button id="complete-btn" class="alt">完成一轮动作</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel notes">
+      <div class="note">
+        建议演示顺序：先让鼠标从左上区域移动到 “轨迹目标 A”，再切到 “轨迹目标 B”，最后点击输入框并输入文字。
+      </div>
+      <div class="note">
+        如果你开启了 `action_visual=True`，页面会显示轨迹点列、点击扩散动画和键盘输入提示，非常适合录屏或对外展示。
+      </div>
+      <div class="note">
+        `style=` 只对 `bezier` 有效；`windmouse` 下会自动忽略 `style`，这样接口对普通用户更简单。
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const statusBox = document.getElementById('status-box');
+    const buttons = [
+      document.getElementById('target-a'),
+      document.getElementById('target-b'),
+      document.getElementById('submit-btn'),
+      document.getElementById('complete-btn'),
+    ];
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        statusBox.value = '最近点击: ' + btn.textContent.trim();
+      });
+    });
+  </script>
+</body>
+</html>
