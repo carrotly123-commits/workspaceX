@@ -45,8 +45,12 @@ Register options:
   --phone <num>                     Phone number for SMS platforms
   --name <display>                  Display name
   --no-export                       Do not write token-free-gateway auth-profiles
-  --email-provider <manual|file|mailtm>
+  --email-provider <manual|file|mailtm|mailhub>
   --email-file <path>               Email pool file (with --email-provider file)
+  --mailhub-url <url>               Mail Hub server URL (default http://127.0.0.1:3100)
+  --mailhub-key <secret>            Mail Hub Bearer API key / API_SECRET
+  --mailhub-provider <name>         Force Mail Hub provider (e.g. outlook, yyds, imap, mailtm)
+  --mailhub-domain <domain>         Request specific domain from Mail Hub
   --cdp <url>                       Chrome CDP URL (default http://127.0.0.1:9222)
   --delay <ms>                      Delay between batch items (default 5000)
 
@@ -57,11 +61,13 @@ Examples:
   npx tsx src/index.ts register kimi --phone +8613800138000
   npx tsx src/index.ts capture claude
   npx tsx src/index.ts register deepseek --count 3 --email-provider mailtm
+  npx tsx src/index.ts register deepseek --email-provider mailhub --mailhub-key your-secret
   npx tsx src/index.ts export --platform deepseek
 
 Config file (optional): ~/.universal-registrar/config.json
 Environment:
-  UR_CDP_URL, UR_STORE_PATH, TFG_STORE_PATH, UR_PLATFORMS_DIR
+  UR_CDP_URL, UR_STORE_PATH, TFG_STORE_PATH, UR_PLATFORMS_DIR,
+  UR_EMAIL_PROVIDER, MAIL_HUB_URL, MAIL_HUB_API_KEY, MAIL_HUB_PROVIDER, MAIL_HUB_DOMAIN
 `);
 }
 
@@ -119,6 +125,18 @@ function buildEngine(flags: Record<string, string | boolean>): RegistrationEngin
     emailFile: flags["email-file"]
       ? String(flags["email-file"])
       : user.emailFile,
+    mailHubUrl: flags["mailhub-url"]
+      ? String(flags["mailhub-url"])
+      : user.mailHubUrl ?? DEFAULT_ENGINE_CONFIG.mailHubUrl,
+    mailHubApiKey: flags["mailhub-key"]
+      ? String(flags["mailhub-key"])
+      : user.mailHubApiKey ?? DEFAULT_ENGINE_CONFIG.mailHubApiKey,
+    mailHubProvider: flags["mailhub-provider"]
+      ? String(flags["mailhub-provider"])
+      : user.mailHubProvider ?? DEFAULT_ENGINE_CONFIG.mailHubProvider,
+    mailHubDomain: flags["mailhub-domain"]
+      ? String(flags["mailhub-domain"])
+      : user.mailHubDomain ?? DEFAULT_ENGINE_CONFIG.mailHubDomain,
     delayBetweenMs: flags.delay
       ? Number(flags.delay)
       : user.delayBetweenMs ?? DEFAULT_ENGINE_CONFIG.delayBetweenMs,
@@ -130,7 +148,10 @@ function buildEngine(flags: Record<string, string | boolean>): RegistrationEngin
 
 async function cmdDoctor(flags: Record<string, string | boolean>): Promise<void> {
   const cdp = String(flags.cdp || DEFAULT_ENGINE_CONFIG.cdpUrl);
-  log(`Checking CDP at ${cdp} ...`);
+  const mailHubUrl = String(flags["mailhub-url"] || DEFAULT_ENGINE_CONFIG.mailHubUrl);
+  const tfgUrl = process.env.TFG_URL || `http://127.0.0.1:${process.env.TFG_PORT || 3456}`;
+
+  log(`1/3 Checking Chrome CDP at ${cdp} ...`);
   try {
     const res = await fetch(`${cdp.replace(/\/$/, "")}/json/version`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -155,6 +176,25 @@ Start Chrome in debug mode first:
   google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-ur-debug
 `);
     process.exitCode = 1;
+  }
+
+  log(`2/3 Checking Mail Hub at ${mailHubUrl} ...`);
+  try {
+    const res = await fetch(`${mailHubUrl.replace(/\/$/, "")}/health`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as Record<string, unknown>;
+    log(`Mail Hub reachable: status=${data.status ?? "ok"} version=${data.version ?? "unknown"}`, "success");
+  } catch (e) {
+    log(`Mail Hub not running (${e instanceof Error ? e.message : e}) — needed only with --email-provider mailhub`, "warn");
+  }
+
+  log(`3/3 Checking Token-Free Gateway at ${tfgUrl} ...`);
+  try {
+    const res = await fetch(`${tfgUrl.replace(/\/$/, "")}/v1/models`);
+    if (!res.ok && res.status !== 401) throw new Error(`HTTP ${res.status}`);
+    log(`Token-Free Gateway reachable at ${tfgUrl} (HTTP ${res.status})`, "success");
+  } catch (e) {
+    log(`Token-Free Gateway not running (${e instanceof Error ? e.message : e}) — start with: make gateway`, "warn");
   }
 }
 

@@ -144,12 +144,20 @@ export interface EngineConfig {
   passwordLength: number;
   /** Account store path */
   storePath: string;
-  /** Email provider id: "manual" | "file" | "mailtm" | "custom" */
+  /** Email provider id: "manual" | "file" | "mailtm" | "mailhub" | "custom" */
   emailProvider: string;
   /** Path to email pool file (one address per line, optional password after :) */
   emailFile?: string;
   /** Mail.tm / other API base */
   emailApiBase?: string;
+  /** Mail Hub base URL (default: http://127.0.0.1:3100) */
+  mailHubUrl?: string;
+  /** Mail Hub Bearer API key or API_SECRET */
+  mailHubApiKey?: string;
+  /** Optional Mail Hub upstream provider filter (e.g. "outlook", "yyds", "imap", "mailtm") */
+  mailHubProvider?: string;
+  /** Optional Mail Hub email domain filter */
+  mailHubDomain?: string;
   /** Export path for token-free-gateway auth-profiles.json */
   tfgStorePath?: string;
 }
@@ -164,7 +172,11 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   storePath:
     process.env.UR_STORE_PATH ??
     `${process.env.HOME ?? process.env.USERPROFILE ?? "."}/.universal-registrar/accounts.json`,
-  emailProvider: "manual",
+  emailProvider: process.env.UR_EMAIL_PROVIDER ?? "manual",
+  mailHubUrl: process.env.MAIL_HUB_URL ?? "http://127.0.0.1:3100",
+  mailHubApiKey: process.env.MAIL_HUB_API_KEY ?? process.env.API_SECRET ?? "",
+  mailHubProvider: process.env.MAIL_HUB_PROVIDER,
+  mailHubDomain: process.env.MAIL_HUB_DOMAIN,
   tfgStorePath:
     process.env.TFG_STORE_PATH ??
     `${process.env.HOME ?? process.env.USERPROFILE ?? "."}/.token-free-gateway/auth-profiles.json`,

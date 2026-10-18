@@ -9,8 +9,8 @@
     "resolveJsonModule": true,
     "types": ["node"],
     "noEmit": true,
-    "rootDir": "src",
+    "allowImportingTsExtensions": true,
     "outDir": "dist"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "test/**/*"]
 }

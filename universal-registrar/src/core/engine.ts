@@ -6,6 +6,7 @@
 import { createInterface } from "node:readline";
 import { AccountStore } from "./account-store.ts";
 import { FileEmailPool } from "./email/file-pool.ts";
+import { MailHubProvider } from "./email/mailhub.ts";
 import { MailTmProvider } from "./email/mailtm.ts";
 import { ManualEmailProvider } from "./email/manual.ts";
 import type {
@@ -80,6 +81,13 @@ export class RegistrationEngine {
 
   private buildEmailProvider(): EmailProvider {
     switch (this.config.emailProvider) {
+      case "mailhub":
+        return new MailHubProvider({
+          baseUrl: this.config.mailHubUrl || this.config.emailApiBase,
+          apiKey: this.config.mailHubApiKey,
+          provider: this.config.mailHubProvider,
+          domain: this.config.mailHubDomain,
+        });
       case "mailtm":
         return new MailTmProvider(this.config.emailApiBase);
       case "file":

@@ -15,7 +15,8 @@
     "platforms": "tsx src/index.ts platforms",
     "doctor": "tsx src/index.ts doctor",
     "capture": "tsx src/index.ts capture",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "playwright-core": "^1.49.0"

@@ -131,6 +131,9 @@ npx tsx src/index.ts export --platform deepseek
 # 默认：终端里粘贴验证码或整封邮件
 --email-provider manual
 
+# Mail Hub 聚合邮箱服务（推荐：支持 Outlook / IMAP / YYDS / 10+ 临时邮箱自动调度与验证码提取）
+--email-provider mailhub --mailhub-url http://127.0.0.1:3100 --mailhub-key your-secret
+
 # 邮箱池文件（每行一个邮箱，验证码仍需人工或配合 IMAP 自扩展）
 --email-provider file --email-file ./config/emails.txt
 

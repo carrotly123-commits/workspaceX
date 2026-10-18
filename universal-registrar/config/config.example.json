@@ -7,6 +7,10 @@
   "passwordLength": 16,
   "emailProvider": "manual",
   "emailFile": "./config/emails.txt",
+  "mailHubUrl": "http://127.0.0.1:3100",
+  "mailHubApiKey": "",
+  "mailHubProvider": "",
+  "mailHubDomain": "",
   "storePath": "",
   "tfgStorePath": ""
 }

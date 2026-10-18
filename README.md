@@ -16,7 +16,30 @@
 ## 联动链路说明（AI 账号注册与免 Token 网关）
 
 1. **`mail-hub`**：启动临时邮箱聚合服务，为自动注册提供邮箱分配与验证码提取接口。
-2. **`universal-registrar`**：调用浏览器与邮箱服务完成各 AI 平台注册或登录，并将采集到的会话凭证写入 `~/.token-free-gateway/auth-profiles.json`。
+2. **`universal-registrar`**：调用浏览器与 `mail-hub`（`--email-provider mailhub`）完成各 AI 平台注册或登录，自动向 `mail-hub` 反馈域名可用性并释放收件箱，同时将采集到的会话凭证写入 `~/.token-free-gateway/auth-profiles.json`。
 3. **`token-free-gateway`**：加载 `auth-profiles.json` 并通过 CDP 驱动浏览器会话，对外暴露统一的 `/v1/chat/completions` OpenAI 兼容接口。
+
+## 快速上手（统一 `Makefile` 编排）
+
+```bash
+# 1. 复制环境变量配置并按需修改 API_SECRET
+cp .env.example .env
+
+# 2. 一键安装核心 AI 套件依赖
+make install-ai
+
+# 3. 分别启动 Chrome 调试实例、Mail Hub (:3100) 与 Token-Free Gateway (:3456)
+make chrome
+make mail-hub
+make gateway
+
+# 4. 一键体检三端连通性
+make doctor
+
+# 5. 使用 mail-hub 自动收码注册账号并自动导出到网关
+make register PLATFORM=deepseek
+# 或直接采集浏览器中已登录的平台会话
+make capture PLATFORM=claude
+```
 
 各子项目的详细安装、配置与运行方式请参考对应子目录下的 `README.md`。
