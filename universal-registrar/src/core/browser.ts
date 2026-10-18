@@ -13,6 +13,36 @@ export interface BrowserSession {
   close: () => Promise<void>;
 }
 
+/** Track virtual cursor position per Page for realistic mouse movement trajectories. */
+const cursorPositions = new WeakMap<Page, { x: number; y: number }>();
+
+/**
+ * Minimal, non-invasive stealth patch:
+ * Only masks `navigator.webdriver` and ensures `window.chrome.runtime` exists
+ * without spoofing Canvas/WebGL/UA (which would mismatch a real headed Chrome).
+ */
+const MINIMAL_STEALTH_SCRIPT = () => {
+  try {
+    if (Object.getOwnPropertyDescriptor(Navigator.prototype, "webdriver") || navigator.webdriver) {
+      Object.defineProperty(Navigator.prototype, "webdriver", {
+        get: () => undefined,
+        configurable: true,
+      });
+    }
+    const w = window as unknown as Record<string, unknown>;
+    if (!w.chrome) w.chrome = {};
+    const ch = w.chrome as Record<string, unknown>;
+    if (!ch.runtime) ch.runtime = {};
+  } catch {
+    /* ignore */
+  }
+};
+
+export async function applyMinimalStealth(page: Page): Promise<void> {
+  await page.addInitScript(MINIMAL_STEALTH_SCRIPT).catch(() => {});
+  await page.evaluate(MINIMAL_STEALTH_SCRIPT).catch(() => {});
+}
+
 async function getChromeWebSocketUrl(cdpUrl: string, timeoutMs = 3000): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -68,7 +98,9 @@ export async function connectCdp(cdpUrl = "http://127.0.0.1:9222"): Promise<Brow
     headers: getHeadersWithAuth(wsUrl),
   });
   const context = browser.contexts()[0] ?? (await browser.newContext());
+  await context.addInitScript(MINIMAL_STEALTH_SCRIPT).catch(() => {});
   const page = context.pages()[0] ?? (await context.newPage());
+  await applyMinimalStealth(page);
   const userAgent = await page.evaluate(() => navigator.userAgent).catch(() => "Mozilla/5.0");
 
   return {
@@ -91,6 +123,7 @@ export async function connectCdp(cdpUrl = "http://127.0.0.1:9222"): Promise<Brow
 /** Open a fresh tab in the shared context. */
 export async function newPage(session: BrowserSession, url?: string): Promise<Page> {
   const page = await session.context.newPage();
+  await applyMinimalStealth(page);
   if (url) {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
   }
@@ -137,7 +170,56 @@ export async function waitForPageCondition(
 }
 
 /**
+ * WindMouse-inspired human trajectory movement to a target coordinate.
+ * Generates smooth acceleration/deceleration steps with subtle hand jitter.
+ */
+export async function humanMoveTo(page: Page, targetX: number, targetY: number): Promise<void> {
+  const prev = cursorPositions.get(page) ?? {
+    x: 120 + Math.random() * 300,
+    y: 100 + Math.random() * 220,
+  };
+  const dx = targetX - prev.x;
+  const dy = targetY - prev.y;
+  const dist = Math.hypot(dx, dy);
+  const steps = Math.max(8, Math.min(28, Math.round(dist / 22)));
+
+  const bend = (Math.random() - 0.5) * Math.min(60, dist * 0.25);
+  const midX = (prev.x + targetX) / 2 - (dy / (dist || 1)) * bend;
+  const midY = (prev.y + targetY) / 2 + (dx / (dist || 1)) * bend;
+
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const ease = 1 - Math.pow(1 - t, 3);
+    const inv = 1 - ease;
+    const jitter = i < steps ? (Math.random() - 0.5) * 1.6 : 0;
+    const x = inv * inv * prev.x + 2 * inv * ease * midX + ease * ease * targetX + jitter;
+    const y = inv * inv * prev.y + 2 * inv * ease * midY + ease * ease * targetY + jitter;
+    await page.mouse.move(x, y);
+    await new Promise((r) => setTimeout(r, 4 + Math.random() * 8));
+  }
+
+  cursorPositions.set(page, { x: targetX, y: targetY });
+}
+
+/**
+ * Click inside a bounding box using human-like trajectory, off-center point, and hold delay.
+ */
+export async function humanClickBox(
+  page: Page,
+  box: { x: number; y: number; width: number; height: number },
+): Promise<void> {
+  const targetX = box.x + box.width * (0.3 + Math.random() * 0.4);
+  const targetY = box.y + box.height * (0.3 + Math.random() * 0.4);
+  await humanMoveTo(page, targetX, targetY);
+  await new Promise((r) => setTimeout(r, 45 + Math.random() * 90));
+  await page.mouse.down();
+  await new Promise((r) => setTimeout(r, 35 + Math.random() * 75));
+  await page.mouse.up();
+}
+
+/**
  * Try a list of CSS / text selectors until one is visible, then click.
+ * Uses human-like mouse trajectory when a bounding box is available.
  */
 export async function clickFirst(
   page: Page,
@@ -149,7 +231,13 @@ export async function clickFirst(
     try {
       const loc = page.locator(sel).first();
       await loc.waitFor({ state: "visible", timeout: Math.min(timeout, 3000) });
-      await loc.click({ timeout });
+      await loc.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
+      const box = await loc.boundingBox().catch(() => null);
+      if (box && box.width > 4 && box.height > 4) {
+        await humanClickBox(page, box);
+      } else {
+        await loc.click({ timeout });
+      }
       return true;
     } catch {
       /* try next */
@@ -159,21 +247,37 @@ export async function clickFirst(
 }
 
 /**
- * Fill the first matching visible input.
+ * Fill the first matching visible input using realistic focus + sequential keystrokes,
+ * falling back to direct `.fill()` if the element transforms or rejects sequential input.
  */
 export async function fillFirst(
   page: Page,
   selectors: string[],
   value: string,
-  options: { timeoutMs?: number; clear?: boolean } = {},
+  options: { timeoutMs?: number; clear?: boolean; humanLike?: boolean } = {},
 ): Promise<boolean> {
   const timeout = options.timeoutMs ?? 8_000;
   for (const sel of selectors) {
     try {
       const loc = page.locator(sel).first();
       await loc.waitFor({ state: "visible", timeout: Math.min(timeout, 3000) });
+      await loc.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
+      const box = await loc.boundingBox().catch(() => null);
+      if (box && box.width > 4 && box.height > 4) {
+        await humanClickBox(page, box);
+      } else {
+        await loc.click({ timeout: 2000 }).catch(() => {});
+      }
       if (options.clear !== false) await loc.fill("");
-      await loc.fill(value, { timeout });
+      if (options.humanLike !== false && value.length <= 64) {
+        await loc.pressSequentially(value, { delay: 32 + Math.random() * 55 });
+        const currentVal = await loc.inputValue().catch(() => value);
+        if (currentVal !== value) {
+          await loc.fill(value, { timeout });
+        }
+      } else {
+        await loc.fill(value, { timeout });
+      }
       return true;
     } catch {
       /* try next */
