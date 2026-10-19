@@ -5,6 +5,8 @@
 import type { Page } from "playwright-core";
 import {
   applyMinimalStealth,
+  clearDomainsCookies,
+  clearPageWebStorage,
   clickFirst,
   collectCookies,
   connectCdp,
@@ -12,12 +14,24 @@ import {
   type BrowserSession,
 } from "../core/browser.ts";
 import { detectCaptchaState, handleCaptchaIfPresent } from "../core/captcha.ts";
+import {
+  attachNetworkCredentialSniffer,
+  buildMeaningfulCredentials,
+  provisionApiKeyViaProtocol,
+  type SniffedNetworkCredentials,
+} from "../core/credentials.ts";
 import type {
   PlatformAdapter,
   RegisterContext,
   RegisterResult,
 } from "../core/types.ts";
-import { cookiesToString, extractVerificationCode, nowIso, sleep } from "../core/utils.ts";
+import {
+  cookiesToString,
+  extractVerificationCode,
+  extractVerificationLink,
+  nowIso,
+  sleep,
+} from "../core/utils.ts";
 import { askForCode } from "../core/email/manual.ts";
 
 export abstract class BasePlatformAdapter implements PlatformAdapter {
@@ -35,14 +49,17 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
   /** Default session capture: open domain, wait for human login, dump cookies. */
   async captureSession(ctx: RegisterContext): Promise<RegisterResult> {
     const session = await connectCdp(ctx.cdpUrl);
+    let page: Page | null = null;
+    let sniffer: ReturnType<typeof attachNetworkCredentialSniffer> | null = null;
     try {
       ctx.onProgress(`Opening ${this.signupUrl} for session capture...`);
-      const page = await session.context.newPage();
+      page = await session.context.newPage();
+      sniffer = attachNetworkCredentialSniffer(page);
       await page.goto(this.signupUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
       ctx.onProgress("Log in manually in the browser, then press Enter here...", "warn");
       await ctx.askHuman("Press Enter after you are logged in: ");
 
-      const creds = await this.harvestCredentials(session, page, ctx);
+      const creds = await this.harvestCredentials(session, page, ctx, sniffer.getSnapshot());
       if (!creds) {
         return {
           success: false,
@@ -59,6 +76,10 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
         message: "Session captured",
       };
     } finally {
+      sniffer?.detach();
+      if (page && session.context.pages().length > 1) {
+        await page.close().catch(() => {});
+      }
       await session.close();
     }
   }
@@ -68,11 +89,17 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
     session: BrowserSession,
     page: Page,
     ctx: RegisterContext,
+    sniffed?: SniffedNetworkCredentials,
   ): Promise<Record<string, unknown> | null> {
     const urls = this.domains.map((d) => (d.startsWith("http") ? d : `https://${d}`));
     const cookies = await collectCookies(session, urls);
     const storage = await extractWebStorageTokens(page);
-    if (cookies.length === 0 && Object.keys(storage.localStorage).length === 0) {
+    if (
+      cookies.length === 0 &&
+      Object.keys(storage.localStorage).length === 0 &&
+      !sniffed?.apiKey &&
+      !sniffed?.accessToken
+    ) {
       return null;
     }
     let originUrl = this.signupUrl;
@@ -84,20 +111,31 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
     } catch {
       // ignore URL parse error
     }
-    return {
-      cookie: cookiesToString(cookies),
+    const cookieStr = cookiesToString(cookies);
+    const provisioned = await provisionApiKeyViaProtocol({
+      origin: originUrl,
+      cookieString: cookieStr,
+      accessToken: sniffed?.accessToken ?? storage.bearerToken,
+      userId: sniffed?.userId,
       userAgent: session.userAgent,
-      capturedAt: nowIso(),
+    });
+
+    return buildMeaningfulCredentials({
       email: ctx.identity.email,
-      startUrl: originUrl,
-      cookieDomain: hostDomain.startsWith(".") ? hostDomain : `.${hostDomain.replace(/^\./, "")}`,
-      domains: this.domains,
-      providerName: this.name,
-      ...(storage.bearerToken ? { bearer: storage.bearerToken } : {}),
-      ...(Object.keys(storage.localStorage).length > 0
-        ? { localStorage: storage.localStorage }
-        : {}),
-    };
+      origin: originUrl,
+      userAgent: session.userAgent,
+      cookies,
+      localStorage: storage.localStorage,
+      bearerToken: storage.bearerToken,
+      sniffed,
+      provisioned,
+      extra: {
+        startUrl: originUrl,
+        cookieDomain: hostDomain.startsWith(".") ? hostDomain : `.${hostDomain.replace(/^\./, "")}`,
+        domains: this.domains,
+        providerName: this.name,
+      },
+    });
   }
 }
 
@@ -166,11 +204,20 @@ export async function semiAutoSignupFlow(
   },
 ): Promise<RegisterResult> {
   const session = await connectCdp(ctx.cdpUrl);
+  let page: Page | null = null;
+  let sniffer: ReturnType<typeof attachNetworkCredentialSniffer> | null = null;
   try {
-    const page = await session.context.newPage();
+    if (ctx.mode !== "manual") {
+      await clearDomainsCookies(session, adapter.domains);
+    }
+    page = await session.context.newPage();
+    sniffer = attachNetworkCredentialSniffer(page);
     await applyMinimalStealth(page);
     ctx.onProgress(`Navigating to ${adapter.signupUrl}`);
     await page.goto(adapter.signupUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    if (ctx.mode !== "manual") {
+      await clearPageWebStorage(page);
+    }
 
     if (ctx.mode === "manual") {
       ctx.onProgress("Manual mode: complete registration in the browser, then press Enter.", "warn");
@@ -245,7 +292,43 @@ export async function semiAutoSignupFlow(
       }
     }
 
-    const credentials = await steps.harvest(session, page);
+    const rawCredentials = await steps.harvest(session, page);
+    const sniffed = sniffer.getSnapshot();
+    let originUrl = adapter.signupUrl;
+    try {
+      originUrl = new URL(page.url().startsWith("http") ? page.url() : adapter.signupUrl).origin;
+    } catch {
+      // ignore
+    }
+    const cookieStr =
+      typeof rawCredentials?.cookie === "string" ? rawCredentials.cookie : "";
+    const bearerToken =
+      typeof rawCredentials?.bearer === "string" && rawCredentials.bearer
+        ? rawCredentials.bearer
+        : undefined;
+    const provisioned = await provisionApiKeyViaProtocol({
+      origin: originUrl,
+      cookieString: cookieStr,
+      accessToken: sniffed.accessToken ?? bearerToken,
+      userId: sniffed.userId,
+      userAgent: session.userAgent,
+    });
+    const credentials =
+      buildMeaningfulCredentials({
+        email: ctx.identity.email,
+        origin: originUrl,
+        userAgent: session.userAgent,
+        cookies: cookieStr,
+        localStorage:
+          rawCredentials?.localStorage && typeof rawCredentials.localStorage === "object"
+            ? (rawCredentials.localStorage as Record<string, string>)
+            : undefined,
+        bearerToken,
+        sniffed,
+        provisioned,
+        extra: rawCredentials ?? undefined,
+      }) ?? rawCredentials;
+
     if (!credentials) {
       return {
         success: false,
@@ -260,7 +343,10 @@ export async function semiAutoSignupFlow(
       status: "success",
       identity: ctx.identity,
       credentials,
-      message: "Registered / session captured",
+      message:
+        typeof credentials.apiKey === "string" && credentials.apiKey
+          ? `Registered & minted API key (${credentials.apiKey.slice(0, 10)}...)`
+          : "Registered / session captured",
     };
   } catch (err) {
     return {
@@ -270,6 +356,10 @@ export async function semiAutoSignupFlow(
       message: err instanceof Error ? err.message : String(err),
     };
   } finally {
+    sniffer?.detach();
+    if (page && session.context.pages().length > 1) {
+      await page.close().catch(() => {});
+    }
     await session.close();
   }
 }
@@ -370,6 +460,7 @@ export async function handleEmailCode(
 ): Promise<void> {
   ctx.onProgress("Waiting for email verification code...", "info");
   let code: string | null = null;
+  let verifyLink: string | null = null;
 
   if (ctx.email && ctx.identity.email) {
     try {
@@ -382,14 +473,26 @@ export async function handleEmailCode(
           if (opts.subjectHint && !m.subject.toLowerCase().includes(opts.subjectHint.toLowerCase())) {
             // soft filter
           }
-          return !!extractVerificationCode(m.bodyText, opts.codeLength);
+          return (
+            Boolean(extractVerificationCode(m.bodyText, opts.codeLength)) ||
+            Boolean(extractVerificationLink(m.bodyHtml || m.bodyText, opts.fromHint))
+          );
         },
         ctx.timeoutMs,
       );
       code = extractVerificationCode(msg.bodyText, opts.codeLength);
+      verifyLink = extractVerificationLink(msg.bodyHtml || msg.bodyText, opts.fromHint);
     } catch (e) {
       ctx.onProgress(`Email provider wait failed: ${e instanceof Error ? e.message : e}`, "warn");
     }
+  }
+
+  // If the email contained a verification/magic link and no code input is visible, follow the link
+  if (verifyLink && !code) {
+    ctx.onProgress(`Following email verification link: ${verifyLink}`, "info");
+    await page.goto(verifyLink, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => {});
+    await sleep(1500);
+    return;
   }
 
   if (!code) {

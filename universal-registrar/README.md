@@ -18,10 +18,15 @@
 
 | 能力 | 说明 |
 | --- | --- |
+| **外部网站发现 (`discover`)** | 从种子 URL、聚合导航页（`--crawl`）、Markdown/HTML/文本文件中自动提取外部 AI 网站，探测框架指纹（OneAPI / NewAPI / VoAPI / Supabase / Clerk / NextAuth / Generic AI）及注册入口 |
+| **注册途径探测 (`probe`)** | 自动探测网站支持的所有注册途径（`api_oneapi`、`api_rest`、`browser_email_direct`、`browser_email_otp`、`browser_phone_sms`、`oauth_only`）、验证码阻碍与 DOM 选择器 |
+| **最优方案决策 (`plan`)** | 对探测到的注册途径量化评分（0–100），优先选择纯 HTTP 协议级注册或免验证浏览器自动流，自动生成最优并发与平台配置 |
+| **高并发批量注册 (`register` / `pipeline`)** | 支持并发工作池（`--concurrency`）、失败自动换新邮箱重试（`--retries`）、浏览器域名级 Cookie/Storage 隔离、多邮箱源自动故障转移（MailHub → Mail.tm → File） |
+| **2API 有意义凭证提取与铸造 (`credentials`)** | 实时网络流量嗅探 + WebStorage 深度解析 + 自动请求 `/api/token/` 铸造 `sk-...` API Key，导出包含 `apiKey`、`accessToken`、`readyHeaders` 的 JSON / Keys / JSONL / `.env` |
 | 13+ 内置平台 | 与 token-free-gateway 对齐：Claude / ChatGPT / DeepSeek / 豆包 / Gemini / GLM / GLM Intl / Grok / Kimi / Perplexity / 千问 / 通义 / 小米 MiMo |
 | 三种模式 | `auto` 全自动 · `semi` 自动填表+人工验证 · `manual` 纯人工，只负责抓会话 |
-| 邮箱 | `manual` 粘贴验证码 · `file` 邮箱池 · `mailtm` 临时邮箱 API |
-| 凭证导出 | 一键写入 token-free-gateway 的 `auth-profiles.json` |
+| 邮箱 | `auto` 智能多源故障转移 · `mailhub` 邮箱中心 · `mailtm` 临时邮箱 API · `file` 邮箱池 · `manual` 人工 |
+| 凭证导出 | 一键导出 2API 专用凭证包（`credentials-2api.json` / `keys.txt`）及 token-free-gateway `auth-profiles.json` |
 | 自定义平台 | `config/platforms/*.json` 零代码扩展 |
 
 ---
@@ -69,6 +74,22 @@ npm run platforms
 ### 3. 注册 / 捕获会话
 
 ```bash
+# 全链路一键流水线：外部网站发现 -> 探测注册途径 -> 选择最优注册方案 -> 批量并发注册 -> 导出每个账号的 sk- Key / Token
+npx tsx src/index.ts pipeline https://your-ai-site.com --count 20 --concurrency 5 --out ./credentials-2api.json
+
+# 分步执行：
+# 1) 外部发现网站（支持目录页爬取 --crawl 或本地列表文件）
+npx tsx src/index.ts discover https://ai-directory.example.com --crawl
+# 2) 探测目标网站的注册途径、验证码阻碍与选择器
+npx tsx src/index.ts probe https://your-ai-site.com
+# 3) 评估并选择最优注册方案（可加 --save-platform 保存配置）
+npx tsx src/index.ts plan https://your-ai-site.com --save-platform
+# 4) 大量注册（支持 --auto-plan 自动选优、--concurrency 并发、--retries 失败自动换邮箱重试）
+npx tsx src/index.ts register https://your-ai-site.com --count 50 --concurrency 5 --auto-plan
+# 5) 导出有意义的 2API 凭证（支持 json / keys / jsonl / env 格式）
+npx tsx src/index.ts credentials --format json --out ./credentials-2api.json
+npx tsx src/index.ts credentials --format keys --out ./keys.txt
+
 # DeepSeek：半自动（自动填邮箱密码，验证码/人机你来处理）
 npx tsx src/index.ts register deepseek --mode semi
 

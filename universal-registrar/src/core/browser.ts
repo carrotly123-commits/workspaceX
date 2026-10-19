@@ -145,6 +145,43 @@ export async function collectCookies(
 }
 
 /**
+ * Clear cookies belonging to target domains before starting a fresh registration
+ * so bulk registration accounts never collide with a previous account's session.
+ */
+export async function clearDomainsCookies(
+  session: BrowserSession,
+  domains: string[],
+): Promise<void> {
+  try {
+    const cleanDomains = domains
+      .map((d) => d.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").replace(/^\./, "").toLowerCase())
+      .filter(Boolean);
+    if (cleanDomains.length === 0) return;
+    for (const d of cleanDomains) {
+      await session.context.clearCookies({ domain: new RegExp(`${d.replace(/\./g, "\\.")}$`, "i") }).catch(() => {});
+    }
+  } catch {
+    /* ignore if unsupported by context */
+  }
+}
+
+/**
+ * Clear localStorage and sessionStorage on the current page origin.
+ */
+export async function clearPageWebStorage(page: Page): Promise<void> {
+  await page
+    .evaluate(() => {
+      try {
+        window.localStorage?.clear();
+        window.sessionStorage?.clear();
+      } catch {
+        /* ignore */
+      }
+    })
+    .catch(() => {});
+}
+
+/**
  * Wait until a predicate on the page becomes true, or timeout.
  */
 export async function waitForPageCondition(

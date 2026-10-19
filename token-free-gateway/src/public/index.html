@@ -279,7 +279,7 @@
       <span class="pill copy-box" onclick="copyApiBase()" title="点击复制 OpenAI 兼容接口地址">
         API Base: <strong id="api-base-url">http://127.0.0.1:3456/v1</strong> 📋
       </span>
-      <button class="btn btn-sm" onclick="loadOverview()">🔄 刷新状态</button>
+      <button type="button" class="btn btn-sm" onclick="loadOverview()">🔄 刷新状态</button>
     </div>
   </header>
 
@@ -346,7 +346,7 @@
     <section class="card">
       <div class="card-title">
         <span>③ 在线对话测试 (Playground)</span>
-        <button class="btn btn-sm" onclick="clearChat()">清空</button>
+        <button type="button" class="btn btn-sm" onclick="clearChat()">清空</button>
       </div>
       <p class="card-desc">直接调用本机 <code>POST /v1/chat/completions</code> 接口测试流式响应。</p>
       <div class="form-group">

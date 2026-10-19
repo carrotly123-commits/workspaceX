@@ -9,8 +9,13 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
+    "discover": "tsx src/index.ts discover",
+    "probe": "tsx src/index.ts probe",
+    "plan": "tsx src/index.ts plan",
     "register": "tsx src/index.ts register",
+    "pipeline": "tsx src/index.ts pipeline",
     "list": "tsx src/index.ts list",
+    "credentials": "tsx src/index.ts credentials",
     "export": "tsx src/index.ts export",
     "platforms": "tsx src/index.ts platforms",
     "doctor": "tsx src/index.ts doctor",

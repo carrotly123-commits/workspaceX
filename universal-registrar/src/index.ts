@@ -4,9 +4,14 @@
  *
  * Commands:
  *   platforms                         List built-in + custom platforms
+ *   discover <url|file>...            Discover external AI websites & signup entrypoints
+ *   probe <platform|url>              Probe registration pathways, barriers & selectors
+ *   plan <platform|url>               Select optimal registration strategy & save config
  *   register <platform> [options]     Register one or more accounts
+ *   pipeline <url|file>...            Full auto pipeline: discover -> probe -> plan -> bulk register -> export 2API keys
  *   capture  <platform>               Only capture an already-logged-in session
  *   list [--platform id]              List saved accounts
+ *   credentials [--platform id]       Inspect or export meaningful 2API credentials (API keys, tokens, headers)
  *   export [--platform id]            Export credentials to token-free-gateway
  *   doctor                            Check Chrome CDP connectivity
  */
@@ -18,6 +23,10 @@ import { RegistrationEngine } from "./core/engine.ts";
 import type { EngineConfig, RegisterMode } from "./core/types.ts";
 import { DEFAULT_ENGINE_CONFIG } from "./core/types.ts";
 import { log } from "./core/utils.ts";
+import {
+  formatCredentialsFor2Api,
+  type CredentialExportFormat,
+} from "./export/credentials-export.ts";
 import { exportToTokenFreeGateway } from "./export/tfg.ts";
 import { saveGenericPlatformConfig, type GenericPlatformConfig } from "./platforms/generic.ts";
 import { loadAllAdapters } from "./platforms/registry.ts";
@@ -32,14 +41,28 @@ Usage:
 
 Commands:
   platforms                         List supported platforms
+  discover <url|file>... [opts]     Discover external AI sites & signup entrypoints
+  probe    <platform|url>           Probe all registration pathways, CAPTCHAs & selectors
+  plan     <platform|url> [opts]    Select optimal registration strategy (API vs Browser)
   register <platform|url> [opts]    Register account(s) on a built-in or any new URL/channel
+  pipeline <url|file>... [opts]     End-to-end: discover -> probe -> plan -> bulk register -> export 2API keys
   capture  <platform|url>           Capture session from already-logged-in browser for any channel
   list [--platform <id>]            Show saved accounts
+  credentials [--platform <id>]     Export/print meaningful 2API credentials (API keys, Bearer tokens, headers)
   export [--platform <id>]          Push credentials into token-free-gateway store
   doctor                            Verify Chrome CDP is reachable
 
-Register options:
-  --count <n>                       How many accounts (default 1, max 20)
+Discovery / Probe / Plan / Pipeline options:
+  --crawl                           Crawl links inside a directory/navigation page during discovery
+  --min-score <0-100>               Minimum strategy feasibility score for pipeline bulk run (default 40)
+  --format <json|keys|jsonl|env>    Output format for 'credentials' command (default json)
+  --out <path>                      Output file path for exported 2API credentials
+
+Register & Bulk options:
+  --count <n>                       How many accounts to register (default 1, unlimited for bulk)
+  --concurrency <n>                 Concurrent registration workers (default 1; 3-5 for API protocol)
+  --retries <n>                     Auto-retries per account with a fresh inbox on failure (default 1)
+  --auto-plan                       Automatically probe site & pick optimal strategy before registering
   --mode <auto|semi|manual>         Override adapter preferred mode
   --url <signupUrl>                 Signup/login URL for onboarding a new channel on the fly
   --chat-url <chatUrl>              Chat page URL for token-free-gateway (defaults to URL origin)
@@ -49,7 +72,7 @@ Register options:
   --phone <num>                     Phone number for SMS platforms
   --name <display>                  Display name
   --no-export                       Do not write token-free-gateway auth-profiles
-  --email-provider <manual|file|mailtm|mailhub>
+  --email-provider <auto|manual|file|mailtm|mailhub>
   --email-file <path>               Email pool file (with --email-provider file)
   --mailhub-url <url>               Mail Hub server URL (default http://127.0.0.1:3100)
   --mailhub-key <secret>            Mail Hub Bearer API key / API_SECRET
@@ -144,6 +167,12 @@ function buildEngine(flags: Record<string, string | boolean>): RegistrationEngin
     delayBetweenMs: flags.delay
       ? Number(flags.delay)
       : user.delayBetweenMs ?? DEFAULT_ENGINE_CONFIG.delayBetweenMs,
+    concurrency: flags.concurrency
+      ? Number(flags.concurrency)
+      : user.concurrency ?? DEFAULT_ENGINE_CONFIG.concurrency,
+    maxRetries: flags.retries !== undefined
+      ? Number(flags.retries)
+      : user.maxRetries ?? DEFAULT_ENGINE_CONFIG.maxRetries,
   };
   const engine = new RegistrationEngine(cfg);
   engine.registerAdapters(loadAllAdapters());
@@ -242,7 +271,10 @@ async function cmdRegister(
   flags: Record<string, string | boolean>,
   captureOnly = false,
 ): Promise<void> {
-  const count = Math.max(1, Math.min(20, Number(flags.count || 1)));
+  const count = Math.max(1, Number(flags.count || 1));
+  const concurrency = flags.concurrency ? Number(flags.concurrency) : undefined;
+  const maxRetries = flags.retries !== undefined ? Number(flags.retries) : undefined;
+  const autoPlan = Boolean(flags["auto-plan"] || flags.autoPlan);
   const mode = flags.mode ? (String(flags.mode) as RegisterMode) : undefined;
   const exportTfg = !flags.noExport;
   const adHocConfig: Partial<GenericPlatformConfig> | undefined =
@@ -299,8 +331,9 @@ async function cmdRegister(
     return;
   }
 
-  if (count === 1) {
+  if (count === 1 && !autoPlan) {
     const acc = await engine.runOne(platform, { identity, mode, exportTfg, adHocConfig });
+    const creds = acc.credentials as Record<string, unknown> | undefined;
     console.log("\nResult:", JSON.stringify({
       platform: acc.platformId,
       email: acc.email,
@@ -308,23 +341,156 @@ async function cmdRegister(
       status: acc.status,
       message: acc.message,
       hasCredentials: !!acc.credentials,
+      authType: creds?.authType,
+      apiKey: creds?.apiKey,
+      accessToken: creds?.accessToken,
+      primarySecret: creds?.primarySecret,
     }, null, 2));
   } else {
     const resolved = engine.resolveOrCreateAdapter(platform, adHocConfig);
     const targetPlatformId = resolved?.id ?? platform;
-    const results = await engine.runBatch(targetPlatformId, count, {
+    const summary = await engine.runBulkWithSummary(targetPlatformId, count, {
       mode,
       exportTfg,
+      adHocConfig,
+      concurrency,
+      maxRetries,
+      autoPlan,
       identities: Array.from({ length: count }, (_, i) =>
         i === 0 ? identity : { phone: identity.phone },
       ),
     });
-    const ok = results.filter((r) => r.status === "success").length;
-    console.log(`\nBatch done: ${ok}/${results.length} succeeded`);
-    for (const r of results) {
-      console.log(`  [${r.status}] ${r.email}  ${r.message ?? ""}`);
+    console.log(
+      `\nBulk registration done: ${summary.succeeded}/${summary.totalRequested} succeeded ` +
+        `(API keys minted: ${summary.apiKeysMinted}, Bearer tokens: ${summary.bearerTokensCaptured}, duration: ${summary.durationMs}ms)`,
+    );
+    for (const r of summary.accounts) {
+      const creds = r.credentials as Record<string, unknown> | undefined;
+      const secretPreview =
+        typeof creds?.apiKey === "string"
+          ? `apiKey=${creds.apiKey}`
+          : typeof creds?.accessToken === "string"
+            ? `token=${creds.accessToken.slice(0, 24)}...`
+            : "";
+      console.log(`  [${r.status}] ${r.email}  ${secretPreview}  ${r.message ?? ""}`);
     }
   }
+}
+
+async function cmdDiscover(
+  engine: RegistrationEngine,
+  positional: string[],
+  flags: Record<string, string | boolean>,
+): Promise<void> {
+  if (positional.length === 0) {
+    const saved = engine.discoveryStore.load();
+    console.log(JSON.stringify(saved, null, 2));
+    return;
+  }
+  const sites = await engine.discoverSites(positional, {
+    crawlDirectoryPages: Boolean(flags.crawl),
+    concurrency: flags.concurrency ? Number(flags.concurrency) : 4,
+  });
+  console.log(JSON.stringify(sites, null, 2));
+}
+
+async function cmdProbe(
+  engine: RegistrationEngine,
+  target: string,
+): Promise<void> {
+  const report = await engine.probeSite(target);
+  console.log(JSON.stringify(report, null, 2));
+}
+
+async function cmdPlan(
+  engine: RegistrationEngine,
+  target: string,
+  flags: Record<string, string | boolean>,
+): Promise<void> {
+  const saveDir = flags["save-platform"]
+    ? process.env.UR_PLATFORMS_DIR || join(process.cwd(), "config", "platforms")
+    : undefined;
+  const plan = await engine.planStrategy(target, {
+    savePlatformDir: saveDir,
+    maxConcurrency: flags.concurrency ? Number(flags.concurrency) : undefined,
+  });
+  console.log(JSON.stringify(plan, null, 2));
+}
+
+async function cmdCredentials(
+  engine: RegistrationEngine,
+  flags: Record<string, string | boolean>,
+): Promise<void> {
+  const platformId = flags.platform ? String(flags.platform) : undefined;
+  const format = (flags.format ? String(flags.format) : "json") as CredentialExportFormat;
+  const outPath = flags.out ? String(flags.out) : undefined;
+  const accounts = engine.store.list(platformId);
+
+  if (outPath) {
+    const { filePath, bundle } = engine.exportCredentialsFor2Api({
+      platformId,
+      outputPath: outPath,
+      format,
+    });
+    log(
+      `Exported ${bundle.totalAccounts} account(s) (${bundle.totalApiKeys} API keys, ${bundle.totalBearerTokens} tokens) → ${filePath}`,
+      "success",
+    );
+    return;
+  }
+  console.log(formatCredentialsFor2Api(accounts, format));
+}
+
+async function cmdPipeline(
+  engine: RegistrationEngine,
+  positional: string[],
+  flags: Record<string, string | boolean>,
+): Promise<void> {
+  if (positional.length === 0) {
+    log("Usage: npx tsx src/index.ts pipeline <url|file>... [--count N] [--concurrency C]", "error");
+    process.exitCode = 1;
+    return;
+  }
+  const saveDir = flags["save-platform"]
+    ? process.env.UR_PLATFORMS_DIR || join(process.cwd(), "config", "platforms")
+    : undefined;
+  const result = await engine.runFullPipeline(positional, {
+    countPerSite: flags.count ? Number(flags.count) : 1,
+    concurrency: flags.concurrency ? Number(flags.concurrency) : undefined,
+    maxRetries: flags.retries !== undefined ? Number(flags.retries) : undefined,
+    minScore: flags["min-score"] ? Number(flags["min-score"]) : 40,
+    crawlDirectoryPages: Boolean(flags.crawl),
+    savePlatformDir: saveDir,
+    credentialsOutputPath: flags.out ? String(flags.out) : undefined,
+    exportTfg: !flags.noExport,
+  });
+  console.log(
+    JSON.stringify(
+      {
+        discoveredCount: result.discovered.length,
+        probedCount: result.probes.length,
+        plans: result.plans.map((p) => ({
+          platformId: p.platformId,
+          strategyKind: p.strategyKind,
+          route: p.chosenRoute.type,
+          score: p.score,
+          canBulkRegister: p.canBulkRegister,
+        })),
+        summaries: result.summaries.map((s) => ({
+          platformId: s.platformId,
+          succeeded: s.succeeded,
+          failed: s.failed,
+          apiKeysMinted: s.apiKeysMinted,
+          bearerTokensCaptured: s.bearerTokensCaptured,
+        })),
+        credentialsFilePath: result.credentialsFilePath,
+        totalExportedAccounts: result.exportedCredentials.totalAccounts,
+        totalApiKeys: result.exportedCredentials.totalApiKeys,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 async function cmdList(
@@ -392,6 +558,36 @@ async function main(): Promise<void> {
     case "platforms":
     case "list-platforms":
       await cmdPlatforms(engine);
+      break;
+    case "discover":
+      await cmdDiscover(engine, positional, flags);
+      break;
+    case "probe": {
+      const target = positional[0];
+      if (!target) {
+        log("Missing target URL or platform id. Try: npx tsx src/index.ts probe https://example.com", "error");
+        process.exitCode = 1;
+        return;
+      }
+      await cmdProbe(engine, target);
+      break;
+    }
+    case "plan": {
+      const target = positional[0];
+      if (!target) {
+        log("Missing target URL or platform id. Try: npx tsx src/index.ts plan https://example.com", "error");
+        process.exitCode = 1;
+        return;
+      }
+      await cmdPlan(engine, target, flags);
+      break;
+    }
+    case "pipeline":
+      await cmdPipeline(engine, positional, flags);
+      break;
+    case "credentials":
+    case "creds":
+      await cmdCredentials(engine, flags);
       break;
     case "register":
     case "reg": {
