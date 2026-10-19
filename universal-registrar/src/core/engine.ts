@@ -21,7 +21,7 @@ import type {
   RegisteredAccount,
 } from "./types.ts";
 import { DEFAULT_ENGINE_CONFIG } from "./types.ts";
-import { createAdHocAdapter, type GenericPlatformConfig } from "../platforms/generic.ts";
+import { GenericAdapter, createAdHocAdapter, type GenericPlatformConfig } from "../platforms/generic.ts";
 import { generateName, generatePassword, log, nowIso, sleep } from "./utils.ts";
 
 function createAskHuman(): HumanPromptFn {
@@ -97,7 +97,18 @@ export class RegistrationEngine {
     adHocOverrides?: Partial<GenericPlatformConfig>,
   ): PlatformAdapter | undefined {
     const existing = this.getAdapter(platformIdOrUrl);
-    if (existing && !adHocOverrides?.signupUrl) return existing;
+    const overrides = Object.fromEntries(Object.entries(adHocOverrides ?? {}).filter(([, value]) => value !== undefined));
+    if (existing && Object.keys(overrides).length) {
+      const config = existing instanceof GenericAdapter ? existing.cfg : {
+        id: existing.id, name: existing.name, signupUrl: existing.signupUrl,
+        domains: existing.domains, preferredMode: existing.preferredMode,
+        needsEmail: existing.needsEmail, needsPhone: existing.needsPhone,
+      };
+      const adapter = new GenericAdapter({ ...config, ...overrides });
+      this.registerAdapter(adapter);
+      return adapter;
+    }
+    if (existing) return existing;
 
     const looksLikeUrlOrDomain =
       /^https?:\/\//i.test(platformIdOrUrl) ||
@@ -165,18 +176,28 @@ export class RegistrationEngine {
       );
     }
 
-    const emailProvider = this.buildEmailProvider();
-    const identity = this.buildIdentity(options.identity);
+    if (adapter instanceof GenericAdapter && !adapter.cfg.successCookie && !adapter.cfg.successSelector) {
+      throw new Error("Configure --success-cookie or --success-selector before registration/capture. Use inspect first. No account actions were attempted.");
+    }
+    const interactiveIdentity = options.captureOnly || (adapter instanceof GenericAdapter && adapter.cfg.authMethod === "github");
+    if (adapter instanceof GenericAdapter && adapter.cfg.authMethod === "github" && options.mode === "auto") {
+      throw new Error("GitHub authorization requires semi or manual mode.");
+    }
+    const emailProvider = interactiveIdentity ? undefined : this.buildEmailProvider();
+    const identity = interactiveIdentity
+      ? { ...options.identity, email: options.identity?.email ?? "", password: "" }
+      : this.buildIdentity(options.identity);
 
     if (!identity.email) {
-      if (adapter.needsEmail || this.config.emailProvider !== "manual") {
+      if (!interactiveIdentity && (adapter.needsEmail || this.config.emailProvider !== "manual")) {
         this.onProgress(`[${adapter.name}] Acquiring email address...`);
-        identity.email = await emailProvider.acquireAddress(adapter.id);
+        identity.email = await emailProvider!.acquireAddress(adapter.id);
       } else {
-        identity.email = (await this.ask(`[${adapter.name}] Email: `)).trim();
+        identity.email = (await this.ask(`[${adapter.name}] Existing account email / local account label: `)).trim();
       }
     }
 
+    if (!identity.email) throw new Error("A non-empty account label is required to avoid overwriting another session.");
     const mode = options.mode ?? adapter.preferredMode;
     this.onProgress(
       `[${adapter.name}] Start register  email=${identity.email}  mode=${mode}`,
@@ -224,15 +245,15 @@ export class RegistrationEngine {
     const saved: RegisteredAccount = {
       ...identity,
       platformId: adapter.id,
-      status: result.status,
-      credentials: result.credentials,
+      status: result.status === "success" && !result.success ? "failed" : result.status,
+      credentials: result.success && result.status === "success" ? result.credentials : undefined,
       message: result.message,
       createdAt: pending.createdAt,
       updatedAt: nowIso(),
     };
     this.store.upsert(saved);
 
-    if (result.success) {
+    if (result.success && result.status === "success") {
       this.onProgress(
         `[${adapter.name}] Success → ${identity.email}`,
         "success",
@@ -249,7 +270,7 @@ export class RegistrationEngine {
       );
     }
 
-    await emailProvider.release?.(identity.email).catch(() => {});
+    await emailProvider?.release?.(identity.email).catch(() => {});
     return saved;
   }
 
@@ -274,6 +295,10 @@ export class RegistrationEngine {
       count = 20;
     }
 
+    const adapter = this.getAdapter(platformId);
+    if (adapter instanceof GenericAdapter && adapter.cfg.authMethod === "github" && count !== 1) {
+      throw new Error("GitHub authorization is interactive and only supports one account at a time.");
+    }
     const results: RegisteredAccount[] = [];
     for (let i = 0; i < count; i++) {
       this.onProgress(`—— Batch ${i + 1}/${count} ——`);
