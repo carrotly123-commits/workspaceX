@@ -16,7 +16,7 @@
 │   临时邮箱与接码中心   │  全渠道自动注册/会话采集   │  OpenAI 兼容 API 网关    │
 ├───────────────────────┼──────────────────────────┼──────────────────────────┤
 │ • 聚合 Mail.tm/Temp   │ • 内置 13 大 AI 平台适配   │ • 标准 /v1/chat/completions│
-│   Mail/Outlook/IMAP   │ • 任意新网站 URL 即填即用  │ • 任意新渠道自动发现挂载  │
+│   Mail/Outlook/IMAP   │ • URL 可作候选，需验证登录证据  │ • 任意新渠道自动发现挂载  │
 │ • 智能验证码正则提取   │ • 多步向导式表单自动探测   │ • 多账号池 Round-Robin   │
 │ • 域名封禁自学习与轮换 │ • 拟人鼠标轨迹 & 过盾恢复  │ • 401/429 自动故障转移   │
 │ • 极速取码 Web 控制台  │ • Cookie + Storage 全采集 │ • 低延迟流式 Tool Calling│
@@ -32,7 +32,7 @@
 | 目录 | 项目名称 | 技术栈 | 默认端口 | 核心职责 |
 | :--- | :--- | :--- | :--- | :--- |
 | [`mail-hub/`](./mail-hub) | **Mail Hub** | TypeScript / Node.js / Hono / SQLite | `3100` | 多渠道临时邮箱聚合服务，支持自动择优调度、收件轮询、验证码提取、域名信誉反馈与 Web 极速取码工作台。 |
-| [`universal-registrar/`](./universal-registrar) | **Universal Registrar** | TypeScript / Node.js / Playwright | CLI | 插件化 + 零配置通用 AI 平台账号注册与浏览器 Session 采集引擎，支持内置 13 平台及**任意新渠道 URL 直接输入即用**。 |
+| [`universal-registrar/`](./universal-registrar) | **Universal Registrar** | TypeScript / Node.js / Playwright | CLI | 插件化 + 需配置并验证的通用 AI 平台接入与浏览器 Session 采集引擎，支持内置 13 平台及**新站点 URL 需按站点配置并验证**。 |
 | [`token-free-gateway/`](./token-free-gateway) | **Token-Free Gateway** | TypeScript / Bun / Playwright | `3456` | 将浏览器网页端 AI 会话转化为标准 OpenAI `/v1/chat/completions` 接口，内置多账号池轮询、自动故障转移、流式 Tool Calling 与可视化 Web 控制台。 |
 | [`wa-app/`](./wa-app) | **WA-App** | Go / gRPC / SQLite / PostgreSQL / React | `8080` / `50091` | WhatsApp 账号与设备指纹管理、注册探测、会话维持、消息收发及 Web 控制台。 |
 | [`open-reverselab/`](./open-reverselab) | **Open-ReverseLab** | Python / MCP / Security KB | MCP | 面向 Agent 的逆向工程与安全分析实验室，内置 178 篇结构化知识库与 100+ MCP 工具集成。 |
@@ -42,13 +42,12 @@
 
 ## 二、核心特性详解
 
-### 1. 不局限于内置平台：任意新渠道“输入即用”（Zero-Config Onboarding）
-- **内置 13 大主流 AI 渠道**：`deepseek`、`claude`、`chatgpt`、`gemini`、`qwen`、`qwen-cn`、`doubao`、`kimi`、`glm`、`glm-intl`、`grok`、`perplexity`、`xiaomimo`。
-- **任意新网站 URL 直接输入即用**：
-  - 在 `universal-registrar` 中直接传入任意新发现的 AI 网站 URL 或域名（如 `https://chat.example.com/signup`），引擎自动推导渠道 ID、主域、Cookie 域与对话地址；
-  - 支持**多步向导式注册表单**（例如 Step 1 输入邮箱点下一步 → Step 2 输入密码 → Step 3 填写邮箱验证码）；
-  - 自动采集 `Cookie` + `localStorage` / `sessionStorage` 中的认证 Token，并连同渠道元数据写入 `~/.token-free-gateway/auth-profiles.json`；
-  - `token-free-gateway` 启动或收到请求时，**自动发现并挂载** `auth-profiles.json` 中的新渠道，通过 `GenericDomClient` 驱动网页对话框，无需编写一行 TypeScript 代码即可通过 `model: "<渠道ID>"` 调用。
+### 1. 通用站点：先检查候选，再验证登录证据
+
+- 通用适配器不会让任意 URL 自动变成可用平台；页面结构、登录流程与网关支持都需要逐站验证，必要时先添加平台配置。
+- `inspect <platform|url>` 只报告页面候选项数量与歧义，不读取或输出凭据；它不会发现站点真实的 API / 模型能力。
+- 登录后用 `verify <platform|url>` 检查当前已打开的目标标签页。验证至少需要 `--success-cookie <cookie名称>` 或 `--success-selector <CSS选择器>`；配置了两项时两项都必须匹配。
+- 选择能证明已登录的非分析类 Cookie 或仅登录后可见的元素；不要用通用 `body` 选择器。未知通用站点没有登录证明或验证不通过时应视为未验证，不会导出。Cookie 存在也不代表网关已连通或模型可用。
 
 ### 2. 多账号池（Account Pool）负载均衡与自动故障转移（Failover）
 - **单渠道多账号并存**：同一渠道多次注册或导入不同邮箱/Cookie 时，凭证自动归入 `profile.accounts` 账号池，不再相互覆盖。
@@ -97,7 +96,7 @@ make doctor
 
 ### 方式 A：通过 Web 可视化控制台直接操作（推荐）
 1. **Token-Free Gateway 控制台**：浏览器打开 **`http://127.0.0.1:3456/`**
-   - 在左栏 **“① 填入新渠道 / 追加账号池”** 中，选择内置渠道或直接粘贴任意新 AI 网站网址（如 `https://chat.example.com`）与 Cookie，点击 **“保存并立即挂载”**；
+   - 在**“添加渠道”抽屉** 中，选择内置渠道或粘贴已核验配置的 AI 网站网址（如 `https://chat.example.com`）与 Cookie，点击 **“保存并立即挂载”**；
    - 在中栏查看所有已激活渠道、模型标签与多账号池状态；
    - 在右栏 **“③ 在线对话测试 (Playground)”** 中点击模型标签即可实时测试流式对话。
 2. **Mail Hub 邮箱与极速取码中心**：浏览器打开 **`http://127.0.0.1:3100/`**
@@ -118,11 +117,21 @@ make register PLATFORM=deepseek COUNT=3
 # 4. 从已登录的浏览器窗口直接采集 Session（免注册）
 make capture PLATFORM=claude
 
-# 5. 【新渠道即输即用】直接传入任意未知 AI 网站的注册/登录网址！
+# 5. 【通用站点注册/登录（需验证）】直接传入任意未知 AI 网站的注册/登录网址！
 cd universal-registrar
 npx tsx src/index.ts register https://chat.example.com/signup
 # 或指定自定义渠道 ID 并保存为持久化配置 config/platforms/my-ai.json：
 npx tsx src/index.ts capture my-ai --url https://chat.example.com/login --chat-url https://chat.example.com --save-platform
+
+# Read-only page inspection; then verify an already-open target tab
+npx tsx src/index.ts inspect https://chat.example.com/login
+npx tsx src/index.ts verify https://chat.example.com --success-cookie session
+
+# GitHub OAuth for an existing target-platform account only; login/consent is manual
+npx tsx src/index.ts register https://chat.example.com/signup --auth github --email existing-label --success-cookie actual_cookie --save-platform --mode semi --count 1
+
+For GitHub authorization, use an existing GitHub user to log in and consent in the browser. This is a single-account semi/manual flow, not GitHub account creation or a claim of live integration. `capture` uses an existing browser session and does not create a mailbox.
+
 ```
 
 ### 方式 C：通过 JSON 配置文件精细定义新渠道
