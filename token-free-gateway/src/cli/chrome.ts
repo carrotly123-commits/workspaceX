@@ -128,12 +128,9 @@ export async function startChrome() {
 	const flags = [
 		`--remote-debugging-port=${CDP_PORT}`,
 		`--user-data-dir=${userDataDir}`,
+		"--disable-blink-features=AutomationControlled",
 		"--no-first-run",
 		"--no-default-browser-check",
-		"--disable-background-networking",
-		"--disable-sync",
-		"--disable-translate",
-		"--disable-features=TranslateUI",
 		"--remote-allow-origins=*",
 		...PROVIDER_URLS,
 	];

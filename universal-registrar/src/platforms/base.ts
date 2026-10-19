@@ -4,18 +4,20 @@
 
 import type { Page } from "playwright-core";
 import {
+  applyMinimalStealth,
   clickFirst,
   collectCookies,
   connectCdp,
   fillFirst,
   type BrowserSession,
 } from "../core/browser.ts";
+import { detectCaptchaState, handleCaptchaIfPresent } from "../core/captcha.ts";
 import type {
   PlatformAdapter,
   RegisterContext,
   RegisterResult,
 } from "../core/types.ts";
-import { cookiesToString, extractVerificationCode, nowIso } from "../core/utils.ts";
+import { cookiesToString, extractVerificationCode, nowIso, sleep } from "../core/utils.ts";
 import { askForCode } from "../core/email/manual.ts";
 
 export abstract class BasePlatformAdapter implements PlatformAdapter {
@@ -101,6 +103,7 @@ export async function semiAutoSignupFlow(
   const session = await connectCdp(ctx.cdpUrl);
   try {
     const page = await session.context.newPage();
+    await applyMinimalStealth(page);
     ctx.onProgress(`Navigating to ${adapter.signupUrl}`);
     await page.goto(adapter.signupUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
@@ -109,28 +112,57 @@ export async function semiAutoSignupFlow(
       await ctx.askHuman("Press Enter when registration + login is done: ");
     } else {
       try {
+        // 1. Handle any entry interstitial / Cloudflare shield before opening form
+        await handleCaptchaIfPresent(page, ctx.onProgress, { timeoutMs: 90_000 });
+
         await steps.openForm(page, session);
         await steps.fillForm(page, session);
 
-        if (ctx.mode === "semi") {
-          ctx.onProgress(
-            "Form filled. Solve captcha / phone verify in the browser if prompted, then confirm.",
-            "warn",
-          );
-        }
+        // 2. Handle pre-submit Turnstile / checkbox if embedded in the signup form
+        await handleCaptchaIfPresent(page, ctx.onProgress, { timeoutMs: 90_000 });
 
         await steps.submit(page, session);
+        await sleep(1200);
+
+        // 3. Handle post-submit popup captcha (Turnstile, GeeTest slider, hCaptcha, etc.)
+        await handleCaptchaIfPresent(page, ctx.onProgress, { timeoutMs: 120_000 });
 
         if (steps.verifyEmail) {
           await steps.verifyEmail(page, session);
         }
 
-        if (ctx.mode === "semi" || adapter.needsPhone) {
-          ctx.onProgress(
-            "If the site still needs captcha / SMS / OAuth, finish it in the browser.",
-            "warn",
-          );
-          await ctx.askHuman("Press Enter when the account is ready (logged in): ");
+        // 4. Smart completion check: if already logged in (isSuccess), skip asking user to press Enter!
+        const alreadyLoggedIn = steps.isSuccess ? await steps.isSuccess(page).catch(() => false) : false;
+        if (!alreadyLoggedIn && (ctx.mode === "semi" || adapter.needsPhone)) {
+          if (steps.isSuccess) {
+            ctx.onProgress(
+              "Waiting for login state in browser (finish any remaining SMS/captcha in browser — auto-detecting)...",
+              "info",
+            );
+            const waitStart = Date.now();
+            let detected = false;
+            while (Date.now() - waitStart < 90_000) {
+              await handleCaptchaIfPresent(page, ctx.onProgress, { timeoutMs: 30_000 });
+              if (await steps.isSuccess(page).catch(() => false)) {
+                detected = true;
+                ctx.onProgress("Login state detected automatically!", "success");
+                break;
+              }
+              await sleep(1500);
+            }
+            if (!detected) {
+              await ctx.askHuman("Press Enter when the account is ready (logged in): ");
+            }
+          } else {
+            const cap = await detectCaptchaState(page);
+            if (cap.present || adapter.needsPhone) {
+              ctx.onProgress(
+                "If the site still needs captcha / SMS / OAuth, finish it in the browser.",
+                "warn",
+              );
+              await ctx.askHuman("Press Enter when the account is ready (logged in): ");
+            }
+          }
         }
       } catch (err) {
         ctx.onProgress(
