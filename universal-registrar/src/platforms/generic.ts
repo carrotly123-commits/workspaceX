@@ -23,6 +23,9 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { Page } from "playwright-core";
+import { connectCdp, type BrowserSession } from "../core/browser.ts";
+import { targetOrigins, verifySession } from "../core/session-verification.ts";
 import { clickFirst, collectCookies, fillFirst } from "../core/browser.ts";
 import { handleCaptchaIfPresent } from "../core/captcha.ts";
 import type { PlatformAdapter, RegisterContext, RegisterResult, RegisterMode } from "../core/types.ts";
@@ -67,6 +70,8 @@ export interface GenericPlatformConfig {
   models?: Array<{ id: string; name: string }>;
   /** Cookie name that indicates logged-in state */
   successCookie?: string;
+  successSelector?: string;
+  authMethod?: "email" | "github";
   /** Host hint for email link extraction */
   emailFromHint?: string;
 }
@@ -79,6 +84,9 @@ export function deriveDomainsFromUrl(rawUrl: string): {
   inferredId: string;
   inferredName: string;
 } {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl.trim()) && !/^https?:\/\//i.test(rawUrl.trim())) {
+    throw new Error("Only HTTP(S) target URLs are supported");
+  }
   const withProto = /^https?:\/\//i.test(rawUrl.trim())
     ? rawUrl.trim()
     : `https://${rawUrl.trim()}`;
@@ -115,10 +123,11 @@ export class GenericAdapter extends BasePlatformAdapter {
   readonly needsEmail: boolean;
   readonly needsPhone: boolean;
   readonly tips?: string;
-  private cfg: GenericPlatformConfig;
+  readonly cfg: GenericPlatformConfig;
 
   constructor(cfg: GenericPlatformConfig) {
     super();
+    targetOrigins(cfg);
     const derived = deriveDomainsFromUrl(cfg.signupUrl);
     this.cfg = cfg;
     this.id = cfg.id || derived.inferredId;
@@ -131,12 +140,84 @@ export class GenericAdapter extends BasePlatformAdapter {
             (v, i, a) => Boolean(v) && a.indexOf(v) === i,
           );
     this.preferredMode = cfg.preferredMode ?? "semi";
-    this.needsEmail = cfg.needsEmail ?? true;
+    this.needsEmail = cfg.authMethod === "github" ? false : (cfg.needsEmail ?? true);
     this.needsPhone = cfg.needsPhone ?? false;
     this.tips = cfg.tips;
   }
 
+  async harvestVerified(session: BrowserSession, page: Page): Promise<Record<string, unknown> | null> {
+    if (!(await verifySession(page, this.cfg)).verified) return null;
+    const cookies = await collectCookies(session, [page.url()]);
+    const storage = await extractWebStorageTokens(page);
+    if (!cookies.length && Object.keys(storage.localStorage).length === 0) return null;
+    const current = new URL(page.url());
+    return {
+      cookie: cookiesToString(cookies),
+      userAgent: session.userAgent,
+      capturedAt: nowIso(),
+      startUrl: this.cfg.chatUrl || current.origin,
+      signupUrl: this.signupUrl,
+      cookieDomain: current.hostname,
+      domains: [current.hostname],
+      providerName: this.name,
+      verification: { level: "login-evidence", chatTested: false },
+      ...(this.cfg.models ? { models: this.cfg.models } : {}),
+      ...(this.cfg.chatSelectors ? { chatSelectors: this.cfg.chatSelectors } : {}),
+      ...(storage.bearerToken ? { bearer: storage.bearerToken } : {}),
+      ...(Object.keys(storage.localStorage).length ? { localStorage: storage.localStorage } : {}),
+    };
+  }
+
+  override async captureSession(ctx: RegisterContext): Promise<RegisterResult> {
+    return this.guidedLogin(ctx, false);
+  }
+
+  private async guidedLogin(ctx: RegisterContext, github: boolean): Promise<RegisterResult> {
+    if (!this.cfg.successCookie && !this.cfg.successSelector) {
+      return { success: false, status: "unverified", identity: ctx.identity, message: "Configure --success-cookie or --success-selector before login; use inspect to diagnose the page." };
+    }
+    if (ctx.mode === "auto") {
+      return { success: false, status: "failed", identity: ctx.identity, message: "Interactive login requires semi or manual mode. GitHub authorization is always performed by the user." };
+    }
+    const session = await connectCdp(ctx.cdpUrl);
+    try {
+      const page = await session.context.newPage();
+      page.setDefaultTimeout(Math.min(ctx.timeoutMs, 15_000));
+      await page.goto(this.signupUrl, { waitUntil: "domcontentloaded", timeout: ctx.timeoutMs });
+      if (github) {
+        const { findGithubEntries } = await import("../core/site-inspection.ts");
+        const entries = findGithubEntries(page);
+        const count = await entries.count();
+        if (count !== 1) {
+          return { success: false, status: "failed", identity: ctx.identity, message: `Found ${count} GitHub login entries; expected exactly one. Use inspect or complete login manually with capture.` };
+        }
+        await entries.click();
+        ctx.onProgress("Use your existing GitHub account. Review the target app and permissions, complete authorization yourself, then return to the target site. GitHub credentials are never collected.", "warn");
+      }
+      await ctx.askHuman("Complete login in the browser (including any popup), then press Enter to verify: ");
+      // Limit capture to tabs opened by this flow, never unrelated browser tabs.
+      const candidates = [page, ...session.context.pages().filter(candidate => candidate !== page)];
+      let reason = "No verified target session was found.";
+      for (const candidate of candidates) {
+        if (candidate !== page && await candidate.opener() !== page) continue;
+        if (candidate.isClosed()) continue;
+        const evidence = await verifySession(candidate, this.cfg);
+        reason = evidence.reason;
+        if (!evidence.verified) continue;
+        const credentials = await this.harvestVerified(session, candidate);
+        if (credentials) return { success: true, status: "success", identity: ctx.identity, credentials: { ...credentials, email: ctx.identity.email }, message: evidence.reason };
+      }
+      return { success: false, status: "unverified", identity: ctx.identity, message: reason };
+    } finally {
+      await session.close();
+    }
+  }
+
   async register(ctx: RegisterContext): Promise<RegisterResult> {
+    if (this.cfg.authMethod === "github") return this.guidedLogin(ctx, true);
+    if (!this.cfg.successCookie && !this.cfg.successSelector) {
+      return { success: false, status: "unverified", identity: ctx.identity, message: "Configure --success-cookie or --success-selector first; no account actions were attempted." };
+    }
     const sel = this.cfg.selectors ?? {};
 
     return semiAutoSignupFlow(this, ctx, {
@@ -245,35 +326,10 @@ export class GenericAdapter extends BasePlatformAdapter {
           });
         }
       },
-      isSuccess: async (page) => {
-        if (this.cfg.successCookie) {
-          return page.evaluate((name) => document.cookie.includes(name), this.cfg.successCookie);
-        }
-        return true;
-      },
+      isSuccess: async (page) => (await verifySession(page, this.cfg)).verified,
       harvest: async (session, page) => {
-        const urls = this.domains.map((d) => (d.startsWith("http") ? d : `https://${d}`));
-        const cookies = await collectCookies(session, urls);
-        const storage = await extractWebStorageTokens(page);
-        if (!cookies.length && Object.keys(storage.localStorage).length === 0) return null;
-        const derived = deriveDomainsFromUrl(this.cfg.chatUrl || this.signupUrl);
-        return {
-          cookie: cookiesToString(cookies),
-          userAgent: session.userAgent,
-          capturedAt: nowIso(),
-          email: ctx.identity.email,
-          startUrl: this.cfg.chatUrl || derived.origin,
-          signupUrl: this.signupUrl,
-          cookieDomain: `.${derived.rootDomain}`,
-          domains: this.domains,
-          providerName: this.name,
-          ...(this.cfg.models ? { models: this.cfg.models } : {}),
-          ...(this.cfg.chatSelectors ? { chatSelectors: this.cfg.chatSelectors } : {}),
-          ...(storage.bearerToken ? { bearer: storage.bearerToken } : {}),
-          ...(Object.keys(storage.localStorage).length > 0
-            ? { localStorage: storage.localStorage }
-            : {}),
-        };
+        const credentials = await this.harvestVerified(session, page);
+        return credentials ? { ...credentials, email: ctx.identity.email } : null;
       },
     });
   }
@@ -286,6 +342,7 @@ export function createAdHocAdapter(
   idOrUrl: string,
   overrides: Partial<GenericPlatformConfig> = {},
 ): GenericAdapter {
+  overrides = Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined));
   const looksLikeUrlOrDomain =
     /^https?:\/\//i.test(idOrUrl) || idOrUrl.includes(".") || idOrUrl.includes("/");
   const rawUrl = overrides.signupUrl || (looksLikeUrlOrDomain ? idOrUrl : `https://${idOrUrl}`);
