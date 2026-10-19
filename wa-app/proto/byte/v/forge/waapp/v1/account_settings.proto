@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "ByteVForge.WaApp.V1";
+option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option java_multiple_files = true;
+option java_outer_classname = "WaAppAccountSettingsProto";
+option java_package = "com.bytevforge.waapp.v1";
+option php_namespace = "ByteVForge\\WaApp\\V1";
+
+service WaAccountSettingsService {
+  rpc GetTwoFactorAuthStatus(GetTwoFactorAuthStatusRequest) returns (GetTwoFactorAuthStatusResponse);
+  rpc SetTwoFactorAuthSettings(SetTwoFactorAuthSettingsRequest) returns (SetTwoFactorAuthSettingsResponse);
+  rpc SetAccountEmail(SetAccountEmailRequest) returns (SetAccountEmailResponse);
+  rpc RequestAccountEmailOtp(RequestAccountEmailOtpRequest) returns (RequestAccountEmailOtpResponse);
+  rpc VerifyAccountEmailOtp(VerifyAccountEmailOtpRequest) returns (VerifyAccountEmailOtpResponse);
+  rpc SetAccountProfileName(SetAccountProfileNameRequest) returns (SetAccountProfileNameResponse);
+  rpc GetAccountProfilePicture(GetAccountProfilePictureRequest) returns (GetAccountProfilePictureResponse);
+  rpc SetAccountProfilePicture(SetAccountProfilePictureRequest) returns (SetAccountProfilePictureResponse);
+  rpc RemoveAccountProfilePicture(RemoveAccountProfilePictureRequest) returns (RemoveAccountProfilePictureResponse);
+}
+
+enum AccountSettingsOperationKind {
+  ACCOUNT_SETTINGS_OPERATION_KIND_UNSPECIFIED = 0;
+  ACCOUNT_SETTINGS_OPERATION_KIND_TWO_FACTOR_AUTH_SETTINGS = 1;
+  ACCOUNT_SETTINGS_OPERATION_KIND_ACCOUNT_EMAIL_SET = 2;
+  ACCOUNT_SETTINGS_OPERATION_KIND_ACCOUNT_EMAIL_OTP_REQUEST = 3;
+  ACCOUNT_SETTINGS_OPERATION_KIND_ACCOUNT_EMAIL_OTP_VERIFY = 4;
+  ACCOUNT_SETTINGS_OPERATION_KIND_ACCOUNT_PROFILE_NAME_SET = 5;
+  ACCOUNT_SETTINGS_OPERATION_KIND_ACCOUNT_PROFILE_PICTURE_SET = 6;
+  ACCOUNT_SETTINGS_OPERATION_KIND_ACCOUNT_PROFILE_PICTURE_REMOVE = 7;
+  ACCOUNT_SETTINGS_OPERATION_KIND_TWO_FACTOR_AUTH_STATUS_GET = 8;
+}
+
+enum AccountSettingsOperationStatus {
+  ACCOUNT_SETTINGS_OPERATION_STATUS_UNSPECIFIED = 0;
+  ACCOUNT_SETTINGS_OPERATION_STATUS_ACCEPTED = 1;
+  ACCOUNT_SETTINGS_OPERATION_STATUS_NEEDS_VERIFICATION = 2;
+  ACCOUNT_SETTINGS_OPERATION_STATUS_WAITING = 3;
+  ACCOUNT_SETTINGS_OPERATION_STATUS_VERIFIED = 4;
+  ACCOUNT_SETTINGS_OPERATION_STATUS_CODE_MISMATCH = 5;
+  ACCOUNT_SETTINGS_OPERATION_STATUS_REJECTED = 6;
+}
+
+message AccountLoginSelector {
+  string login_state_id = 1;
+  string registered_identity_id = 2;
+  string wa_account_id = 3;
+  string client_profile_id = 4;
+}
+
+message AccountSettingsOperation {
+  string account_settings_operation_id = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  string login_state_id = 4;
+  string registered_identity_id = 5;
+  AccountSettingsOperationKind kind = 6;
+  AccountSettingsOperationStatus status = 7;
+  google.protobuf.Duration wait_time = 8;
+  google.protobuf.Timestamp completed_at = 9;
+  WaError error = 10;
+}
+
+message TwoFactorAuthStatus {
+  bool configured = 1;
+  bool email_configured = 2;
+  string email_address = 3;
+  bool email_verified = 4;
+  bool email_confirmed = 5;
+}
+
+message GetTwoFactorAuthStatusRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+  bool remote_refresh = 3;
+}
+
+message GetTwoFactorAuthStatusResponse {
+  TwoFactorAuthStatus status = 1;
+  WaError error = 2;
+}
+
+message SetTwoFactorAuthSettingsRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+  // Sensitive. Do not log, persist, or emit outside the authorized account settings operation.
+  SensitiveText pin = 3;
+}
+
+message SetTwoFactorAuthSettingsResponse {
+  AccountSettingsOperation operation = 1;
+  WaError error = 2;
+}
+
+message SetAccountEmailRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+  string email_address = 3;
+  // Sensitive. Do not log, persist, or emit outside the authorized account settings operation.
+  SensitiveText google_id_token = 4;
+}
+
+message SetAccountEmailResponse {
+  AccountSettingsOperation operation = 1;
+  WaError error = 2;
+}
+
+message RequestAccountEmailOtpRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+  string locale_language = 3;
+  string locale_country = 4;
+}
+
+message RequestAccountEmailOtpResponse {
+  AccountSettingsOperation operation = 1;
+  WaError error = 2;
+}
+
+message VerifyAccountEmailOtpRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+  // Sensitive. Do not log, persist, or emit outside the authorized account settings operation.
+  SensitiveText code = 3;
+}
+
+message VerifyAccountEmailOtpResponse {
+  AccountSettingsOperation operation = 1;
+  WaError error = 2;
+}
+
+message SetAccountProfileNameRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+  string display_name = 3;
+}
+
+message SetAccountProfileNameResponse {
+  AccountSettingsOperation operation = 1;
+  WaError error = 2;
+}
+
+message GetAccountProfilePictureRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+}
+
+message GetAccountProfilePictureResponse {
+  bytes image = 1;
+  string content_type = 2;
+  string profile_picture_id = 3;
+  WaError error = 4;
+}
+
+message SetAccountProfilePictureRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+  bytes image = 3;
+  string content_type = 4;
+}
+
+message SetAccountProfilePictureResponse {
+  AccountSettingsOperation operation = 1;
+  string profile_picture_id = 2;
+  bool has_staging = 3;
+  WaError error = 4;
+}
+
+message RemoveAccountProfilePictureRequest {
+  RequestContext context = 1;
+  AccountLoginSelector selector = 2;
+}
+
+message RemoveAccountProfilePictureResponse {
+  AccountSettingsOperation operation = 1;
+  WaError error = 2;
+}

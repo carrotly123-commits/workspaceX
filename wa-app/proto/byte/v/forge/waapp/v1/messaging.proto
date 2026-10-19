@@ -1,0 +1,291 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "ByteVForge.WaApp.V1";
+option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option java_multiple_files = true;
+option java_outer_classname = "WaAppMessagingProto";
+option java_package = "com.bytevforge.waapp.v1";
+option php_namespace = "ByteVForge\\WaApp\\V1";
+
+service WaMessagingService {
+  rpc OpenMessageSession(OpenMessageSessionRequest) returns (OpenMessageSessionResponse);
+  rpc GetMessageSession(GetMessageSessionRequest) returns (GetMessageSessionResponse);
+  rpc ReceiveMessageBatch(ReceiveMessageBatchRequest) returns (ReceiveMessageBatchResponse);
+  rpc ListAccountMessages(ListAccountMessagesRequest) returns (ListAccountMessagesResponse);
+  rpc GetLongConnectionStatus(GetLongConnectionStatusRequest) returns (GetLongConnectionStatusResponse);
+  rpc MarkAccountMessagesRead(MarkAccountMessagesReadRequest) returns (MarkAccountMessagesReadResponse);
+  rpc DeleteAccountMessages(DeleteAccountMessagesRequest) returns (DeleteAccountMessagesResponse);
+  rpc SendTextMessage(SendTextMessageRequest) returns (SendTextMessageResponse);
+  rpc AcknowledgeMessage(AcknowledgeMessageRequest) returns (AcknowledgeMessageResponse);
+  rpc CloseMessageSession(CloseMessageSessionRequest) returns (CloseMessageSessionResponse);
+}
+
+enum MessageSessionStatus {
+  MESSAGE_SESSION_STATUS_UNSPECIFIED = 0;
+  MESSAGE_SESSION_STATUS_OPENING = 1;
+  MESSAGE_SESSION_STATUS_OPEN = 2;
+  MESSAGE_SESSION_STATUS_DRAINING = 3;
+  MESSAGE_SESSION_STATUS_CLOSED = 4;
+  MESSAGE_SESSION_STATUS_FAILED = 5;
+}
+
+enum InboundMessageKind {
+  INBOUND_MESSAGE_KIND_UNSPECIFIED = 0;
+  INBOUND_MESSAGE_KIND_MESSAGE = 1;
+  INBOUND_MESSAGE_KIND_NOTIFICATION = 2;
+  INBOUND_MESSAGE_KIND_RECEIPT = 3;
+  INBOUND_MESSAGE_KIND_SYSTEM = 4;
+}
+
+enum MessageEncryptionState {
+  MESSAGE_ENCRYPTION_STATE_UNSPECIFIED = 0;
+  MESSAGE_ENCRYPTION_STATE_PLAINTEXT = 1;
+  MESSAGE_ENCRYPTION_STATE_ENCRYPTED = 2;
+  MESSAGE_ENCRYPTION_STATE_DECRYPTED = 3;
+  MESSAGE_ENCRYPTION_STATE_DECRYPTION_FAILED = 4;
+}
+
+enum MessageAckStatus {
+  MESSAGE_ACK_STATUS_UNSPECIFIED = 0;
+  MESSAGE_ACK_STATUS_NOT_REQUIRED = 1;
+  MESSAGE_ACK_STATUS_PENDING = 2;
+  MESSAGE_ACK_STATUS_ACKED = 3;
+  MESSAGE_ACK_STATUS_FAILED = 4;
+}
+
+enum MessageDeleteStatus {
+  MESSAGE_DELETE_STATUS_UNSPECIFIED = 0;
+  MESSAGE_DELETE_STATUS_NOT_DELETED = 1;
+  MESSAGE_DELETE_STATUS_DELETED_FOR_ME = 2;
+}
+
+enum AccountMessageDeleteMode {
+  ACCOUNT_MESSAGE_DELETE_MODE_UNSPECIFIED = 0;
+  ACCOUNT_MESSAGE_DELETE_MODE_FOR_ME = 1;
+  ACCOUNT_MESSAGE_DELETE_MODE_FOR_EVERYONE = 2;
+}
+
+enum AccountMessageDirection {
+  ACCOUNT_MESSAGE_DIRECTION_UNSPECIFIED = 0;
+  ACCOUNT_MESSAGE_DIRECTION_INBOUND = 1;
+  ACCOUNT_MESSAGE_DIRECTION_OUTBOUND = 2;
+  ACCOUNT_MESSAGE_DIRECTION_SYSTEM = 3;
+}
+
+enum AccountMessageSource {
+  ACCOUNT_MESSAGE_SOURCE_UNSPECIFIED = 0;
+  ACCOUNT_MESSAGE_SOURCE_LONG_CONNECTION = 1;
+  ACCOUNT_MESSAGE_SOURCE_IMPORTED_HISTORY = 2;
+  ACCOUNT_MESSAGE_SOURCE_LOCAL_SEND = 3;
+}
+
+enum LongConnectionStatus {
+  LONG_CONNECTION_STATUS_UNSPECIFIED = 0;
+  LONG_CONNECTION_STATUS_STARTING = 1;
+  LONG_CONNECTION_STATUS_CONNECTED = 2;
+  LONG_CONNECTION_STATUS_HEARTBEAT_WAITING = 3;
+  LONG_CONNECTION_STATUS_RECONNECTING = 4;
+  LONG_CONNECTION_STATUS_FAILED = 5;
+  LONG_CONNECTION_STATUS_STOPPED = 6;
+}
+
+message MessageSession {
+  string message_session_id = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  string registered_identity_id = 4;
+  string protocol_profile_id = 5;
+  MessageSessionStatus status = 6;
+  google.protobuf.Timestamp opened_at = 7;
+  google.protobuf.Timestamp last_seen_at = 8;
+  google.protobuf.Timestamp closed_at = 9;
+  WaError last_error = 10;
+}
+
+message InboundMessage {
+  string message_id = 1;
+  string message_session_id = 2;
+  InboundMessageKind kind = 3;
+  MessageEncryptionState encryption_state = 4;
+  MessageAckStatus ack_status = 5;
+  string sender_ref = 6;
+  string payload_ref = 7;
+  google.protobuf.Timestamp received_at = 8;
+  WaError last_error = 9;
+  string contact_ref = 10;
+  string provider_message_id = 11;
+  google.protobuf.Timestamp provider_timestamp = 12;
+  google.protobuf.Timestamp read_at = 13;
+  MessageDeleteStatus delete_status = 14;
+  google.protobuf.Timestamp deleted_at = 15;
+  AccountMessageDirection direction = 16;
+  AccountMessageSource source = 17;
+}
+
+message AccountMessage {
+  string account_message_id = 1;
+  string wa_account_id = 2;
+  string message_session_id = 3;
+  string contact_ref = 4;
+  string sender_ref = 5;
+  AccountMessageDirection direction = 6;
+  AccountMessageSource source = 7;
+  InboundMessageKind kind = 8;
+  MessageEncryptionState encryption_state = 9;
+  MessageAckStatus ack_status = 10;
+  SensitiveText text = 11;
+  google.protobuf.Timestamp received_at = 12;
+  WaError last_error = 13;
+  google.protobuf.Timestamp read_at = 14;
+  MessageDeleteStatus delete_status = 15;
+  google.protobuf.Timestamp deleted_at = 16;
+}
+
+message LongConnectionState {
+  string login_state_id = 2;
+  string wa_account_id = 3;
+  string client_profile_id = 4;
+  string registered_identity_id = 5;
+  string message_session_id = 6;
+  LongConnectionStatus status = 7;
+  bool heartbeat_supported = 8;
+  google.protobuf.Timestamp started_at = 9;
+  google.protobuf.Timestamp last_connected_at = 10;
+  google.protobuf.Timestamp last_heartbeat_at = 11;
+  google.protobuf.Timestamp last_message_at = 12;
+  int32 reconnect_count = 13;
+  WaError last_error = 14;
+}
+
+message OpenMessageSessionRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  string registered_identity_id = 4;
+  string protocol_profile_id = 5;
+}
+
+message OpenMessageSessionResponse {
+  MessageSession session = 1;
+  WaError error = 2;
+}
+
+message GetMessageSessionRequest {
+  RequestContext context = 1;
+  string message_session_id = 2;
+}
+
+message GetMessageSessionResponse {
+  MessageSession session = 1;
+  WaError error = 2;
+}
+
+message ReceiveMessageBatchRequest {
+  RequestContext context = 1;
+  string message_session_id = 2;
+  int32 max_messages = 3;
+  google.protobuf.Duration wait_timeout = 4;
+}
+
+message ReceiveMessageBatchResponse {
+  repeated InboundMessage messages = 1;
+  MessageSession session = 2;
+  WaError error = 3;
+}
+
+message ListAccountMessagesRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string contact_ref = 3;
+  int32 limit = 4;
+  string cursor = 5;
+  bool include_sensitive_text = 6;
+}
+
+message ListAccountMessagesResponse {
+  repeated AccountMessage messages = 1;
+  string next_cursor = 2;
+  WaError error = 3;
+}
+
+message GetLongConnectionStatusRequest {
+  RequestContext context = 1;
+  string login_state_id = 2;
+  string wa_account_id = 3;
+  string client_profile_id = 4;
+  string registered_identity_id = 5;
+}
+
+message GetLongConnectionStatusResponse {
+  repeated LongConnectionState connections = 1;
+  WaError error = 2;
+}
+
+message MarkAccountMessagesReadRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  repeated string account_message_ids = 3;
+  bool local_only = 4;
+  string contact_ref = 5;
+}
+
+message MarkAccountMessagesReadResponse {
+  int32 updated_count = 1;
+  int32 receipt_sent_count = 2;
+  WaError error = 3;
+  WaError receipt_error = 4;
+}
+
+message DeleteAccountMessagesRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  repeated string account_message_ids = 3;
+  AccountMessageDeleteMode mode = 4;
+}
+
+message DeleteAccountMessagesResponse {
+  int32 updated_count = 1;
+  WaError error = 2;
+}
+
+message SendTextMessageRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string contact_ref = 3;
+  SensitiveText text = 4;
+  string client_message_id = 5;
+}
+
+message SendTextMessageResponse {
+  string provider_message_id = 1;
+  google.protobuf.Timestamp sent_at = 2;
+  WaError error = 3;
+}
+
+message AcknowledgeMessageRequest {
+  RequestContext context = 1;
+  string message_session_id = 2;
+  string message_id = 3;
+}
+
+message AcknowledgeMessageResponse {
+  InboundMessage message = 1;
+  WaError error = 2;
+}
+
+message CloseMessageSessionRequest {
+  RequestContext context = 1;
+  string message_session_id = 2;
+  string reason = 3;
+}
+
+message CloseMessageSessionResponse {
+  MessageSession session = 1;
+  WaError error = 2;
+}

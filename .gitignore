@@ -1,0 +1,24 @@
+# Workspace & IDE
+.hoplite/
+.DS_Store
+.idea/
+.vscode/
+
+# Dependencies & build outputs
+node_modules/
+dist/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Sensitive & local runtime files
+.env
+.env.local
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+auth-profiles.json

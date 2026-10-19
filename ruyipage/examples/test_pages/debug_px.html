@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PerimeterX Debug</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .info h2 {
+            margin-top: 0;
+        }
+        .params {
+            background: #070606;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            background: #e3f2fd;
+        }
+        .status.success {
+            background: #c8e6c9;
+        }
+        .status.failed {
+            background: #ffcdd2;
+        }
+        #iframe-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .cookies {
+            margin-top: 15px;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .messages {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(52, 4, 4, 0.1);
+        }
+        .messages h3 {
+            margin-top: 0;
+        }
+        .message-list {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f9f9f9;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .message-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            border-left: 3px solid #2196F3;
+        }
+        .message-item.sent {
+            background: #e3f2fd;
+            border-left-color: #2196F3;
+        }
+        .message-item.received {
+            background: #f1f8e9;
+            border-left-color: #8bc34a;
+        }
+        .message-time {
+            color: #666;
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+        .message-content {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .fingerprint {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .fingerprint h3 {
+            margin-top: 0;
+        }
+        .fingerprint-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 10px;
+        }
+        .fingerprint-item {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .fingerprint-item strong {
+            color: #2196F3;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .fingerprint-item code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="info">
+            <h2>PerimeterX Challenge Debug</h2>
+            <div class="params">
+                <strong>Parameters:</strong><br>
+                uuid: e028faf4-08de-11f1-bf4b-cdbdc3c805c0<br>
+                vid: e028fb46-08de-11f1-bf4b-37e98515a577<br>
+                collectMode: false<br><br>
+                <small style="color: #666;">
+                    注意：验证类型（按压/无感）由 PerimeterX 服务端根据 uuid/vid 决定，无法通过前端控制
+                </small>
+            </div>
+            <div class="status" id="status">
+                Status: Waiting for challenge...
+            </div>
+            <div class="cookies" id="cookies" style="display:none;">
+                <strong>Cookies:</strong><br>
+                <pre id="cookies-content"></pre>
+            </div>
+        </div>
+
+        <div class="fingerprint">
+            <h3>Browser Fingerprint (被动监听 - 主页面属性访问)</h3>
+            <div class="fingerprint-grid" id="fingerprint-grid">
+                <div style="color: #999; text-align: center;">等待 iframe 加载并监听属性访问...</div>
+            </div>
+            <small style="color: #666; display: block; margin-top: 10px;">
+                注意：由于同源策略，无法直接监听跨域 iframe 内部的 API 调用。<br>
+                建议查看下方的网络请求，可以看到 iframe 发送给服务器的指纹数据。
+            </small>
+        </div>
+
+        <div class="messages" style="margin-top: 20px;">
+            <h3>Network Requests (网络请求监听)</h3>
+            <div class="message-list" id="network-list" style="max-height: 300px;">
+                <div style="color: #999; text-align: center;">等待网络请求...</div>
+            </div>
+        </div>
+
+        <div class="messages">
+            <h3>Message Log</h3>
+            <div class="message-list" id="message-list">
+                <div style="color: #999; text-align: center;">No messages yet...</div>
+            </div>
+        </div>
+
+        <div id="iframe-container">
+            <!-- iframe will be injected here -->
+        </div>
+    </div>
+
+    <script>
+        // Hardcoded parameters
+        const params = {
+            uuid: "e5222307-3af1-11f1-93ba-e7198ab883fc",
+            vid: "e5222373-3af1-11f1-93ba-7d20dc854a13"
+        };
+
+        // Store results
+        window.__pxResult = null;
+        window.__pxCookies = {};
+
+        // Message log
+        const messageLog = [];
+        const networkLog = [];
+
+        // Hook XMLHttpRequest
+        function hookXHR() {
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            const originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+
+            XMLHttpRequest.prototype.open = function(method, url) {
+                this._method = method;
+                this._url = url;
+                this._requestHeaders = {};
+                return originalOpen.apply(this, arguments);
+            };
+
+            XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+                this._requestHeaders[header] = value;
+                return originalSetRequestHeader.apply(this, arguments);
+            };
+
+            XMLHttpRequest.prototype.send = function(body) {
+                const xhr = this;
+                logNetworkRequest({
+                    type: 'XHR',
+                    method: this._method,
+                    url: this._url,
+                    headers: this._requestHeaders,
+                    body: body ? body.substring(0, 1000) : null
+                });
+
+                this.addEventListener('load', function() {
+                    logNetworkResponse({
+                        type: 'XHR',
+                        url: xhr._url,
+                        status: xhr.status,
+                        response: xhr.responseText ? xhr.responseText.substring(0, 1000) : null
+                    });
+                });
+
+                return originalSend.apply(this, arguments);
+            };
+        }
+
+        // Hook fetch
+        function hookFetch() {
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options = {}) {
+                logNetworkRequest({
+                    type: 'Fetch',
+                    method: options.method || 'GET',
+                    url: url,
+                    headers: options.headers,
+                    body: options.body ? String(options.body).substring(0, 1000) : null
+                });
+
+                return originalFetch.apply(this, arguments).then(response => {
+                    response.clone().text().then(text => {
+                        logNetworkResponse({
+                            type: 'Fetch',
+                            url: url,
+                            status: response.status,
+                            response: text ? text.substring(0, 1000) : null
+                        });
+                    });
+                    return response;
+                });
+            };
+        }
+
+        // Log network request
+        function logNetworkRequest(data) {
+            networkLog.push({
+                direction: 'request',
+                timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 }),
+                ...data
+            });
+            updateNetworkDisplay();
+        }
+
+        // Log network response
+        function logNetworkResponse(data) {
+            networkLog.push({
+                direction: 'response',
+                timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 }),
+                ...data
+            });
+            updateNetworkDisplay();
+        }
+
+        // Update network display
+        function updateNetworkDisplay() {
+            const networkList = document.getElementById('network-list');
+
+            if (networkLog.length === 0) {
+                return;
+            }
+
+            if (networkLog.length === 1) {
+                networkList.innerHTML = '';
+            }
+
+            const lastLog = networkLog[networkLog.length - 1];
+            const item = document.createElement('div');
+            item.className = 'message-item ' + (lastLog.direction === 'request' ? 'sent' : 'received');
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = `[${lastLog.timestamp}] ${lastLog.direction === 'request' ? '📤 REQUEST' : '📥 RESPONSE'} ${lastLog.type}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            let content = '';
+            if (lastLog.direction === 'request') {
+                content = `${lastLog.method} ${lastLog.url}\n`;
+                if (lastLog.headers) {
+                    content += `Headers: ${JSON.stringify(lastLog.headers, null, 2)}\n`;
+                }
+                if (lastLog.body) {
+                    content += `Body: ${lastLog.body}`;
+                }
+            } else {
+                content = `${lastLog.status} ${lastLog.url}\n`;
+                if (lastLog.response) {
+                    content += `Response: ${lastLog.response}`;
+                }
+            }
+            contentDiv.textContent = content;
+
+            item.appendChild(timeDiv);
+            item.appendChild(contentDiv);
+            networkList.appendChild(item);
+
+            // Auto scroll
+            networkList.scrollTop = networkList.scrollHeight;
+        }
+
+        // Fingerprint tracking
+        const accessedProperties = new Set();
+        const accessLog = [];
+
+        // Hook navigator properties
+        function hookNavigator() {
+            const navigatorProps = Object.getOwnPropertyNames(Navigator.prototype);
+            const navigatorInstance = Object.getOwnPropertyNames(navigator);
+            const allProps = [...new Set([...navigatorProps, ...navigatorInstance])];
+
+            allProps.forEach(prop => {
+                try {
+                    const descriptor = Object.getOwnPropertyDescriptor(Navigator.prototype, prop) ||
+                                     Object.getOwnPropertyDescriptor(navigator, prop);
+
+                    if (descriptor && descriptor.get) {
+                        const originalGetter = descriptor.get;
+                        Object.defineProperty(Navigator.prototype, prop, {
+                            get: function() {
+                                const value = originalGetter.call(this);
+                                logAccess('navigator.' + prop, value);
+                                return value;
+                            },
+                            configurable: true
+                        });
+                    } else if (typeof navigator[prop] !== 'function') {
+                        // For direct properties
+                        const value = navigator[prop];
+                        Object.defineProperty(navigator, prop, {
+                            get: function() {
+                                logAccess('navigator.' + prop, value);
+                                return value;
+                            },
+                            configurable: true
+                        });
+                    }
+                } catch (e) {
+                    // Some properties can't be hooked
+                }
+            });
+        }
+
+        // Hook screen properties
+        function hookScreen() {
+            const screenProps = Object.getOwnPropertyNames(Screen.prototype);
+            screenProps.forEach(prop => {
+                try {
+                    const descriptor = Object.getOwnPropertyDescriptor(Screen.prototype, prop);
+                    if (descriptor && descriptor.get) {
+                        const originalGetter = descriptor.get;
+                        Object.defineProperty(Screen.prototype, prop, {
+                            get: function() {
+                                const value = originalGetter.call(this);
+                                logAccess('screen.' + prop, value);
+                                return value;
+                            },
+                            configurable: true
+                        });
+                    }
+                } catch (e) {}
+            });
+        }
+
+        // Hook canvas
+        function hookCanvas() {
+            const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function() {
+                logAccess('canvas.toDataURL', 'called');
+                return originalToDataURL.apply(this, arguments);
+            };
+
+            const originalGetContext = HTMLCanvasElement.prototype.getContext;
+            HTMLCanvasElement.prototype.getContext = function(type) {
+                logAccess('canvas.getContext', type);
+                return originalGetContext.apply(this, arguments);
+            };
+        }
+
+        // Hook WebGL
+        function hookWebGL() {
+            const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(param) {
+                const result = originalGetParameter.apply(this, arguments);
+                logAccess('webgl.getParameter', param + ' = ' + result);
+                return result;
+            };
+        }
+
+        // Hook AudioContext
+        function hookAudio() {
+            if (window.AudioContext || window.webkitAudioContext) {
+                const OriginalAudioContext = window.AudioContext || window.webkitAudioContext;
+                window.AudioContext = window.webkitAudioContext = function() {
+                    logAccess('AudioContext', 'created');
+                    return new OriginalAudioContext();
+                };
+            }
+        }
+
+        // Hook localStorage/sessionStorage
+        function hookStorage() {
+            ['localStorage', 'sessionStorage'].forEach(storageType => {
+                const storage = window[storageType];
+                const originalGetItem = storage.getItem;
+                const originalSetItem = storage.setItem;
+
+                storage.getItem = function(key) {
+                    logAccess(storageType + '.getItem', key);
+                    return originalGetItem.apply(this, arguments);
+                };
+
+                storage.setItem = function(key, value) {
+                    logAccess(storageType + '.setItem', key);
+                    return originalSetItem.apply(this, arguments);
+                };
+            });
+        }
+
+        // Hook document.cookie
+        function hookCookie() {
+            const descriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') ||
+                             Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');
+
+            if (descriptor) {
+                const originalGet = descriptor.get;
+                const originalSet = descriptor.set;
+
+                Object.defineProperty(document, 'cookie', {
+                    get: function() {
+                        logAccess('document.cookie', 'read');
+                        return originalGet.call(this);
+                    },
+                    set: function(value) {
+                        logAccess('document.cookie', 'write: ' + value.split('=')[0]);
+                        return originalSet.call(this, value);
+                    }
+                });
+            }
+        }
+
+        // Hook Date for timezone detection
+        function hookDate() {
+            const OriginalDate = Date;
+            window.Date = function() {
+                logAccess('Date', 'created');
+                return new OriginalDate(...arguments);
+            };
+            window.Date.prototype = OriginalDate.prototype;
+            window.Date.now = OriginalDate.now;
+        }
+
+        // Log access
+        function logAccess(property, value) {
+            const key = property + ': ' + String(value).substring(0, 100);
+            if (!accessedProperties.has(key)) {
+                accessedProperties.add(key);
+                accessLog.push({
+                    property,
+                    value: String(value).substring(0, 200),
+                    timestamp: new Date().toISOString()
+                });
+                updateFingerprintDisplay();
+            }
+        }
+
+        function updateFingerprintDisplay() {
+            const grid = document.getElementById('fingerprint-grid');
+            grid.innerHTML = '';
+
+            if (accessLog.length === 0) {
+                grid.innerHTML = '<div style="color: #999; text-align: center;">暂无属性访问记录</div>';
+                return;
+            }
+
+            accessLog.forEach(log => {
+                const item = document.createElement('div');
+                item.className = 'fingerprint-item';
+
+                const label = document.createElement('strong');
+                label.textContent = log.property;
+
+                const value = document.createElement('code');
+                value.textContent = log.value;
+
+                item.appendChild(label);
+                item.appendChild(value);
+                grid.appendChild(item);
+            });
+        }
+
+        // Initialize hooks before iframe loads
+        try {
+            hookNavigator();
+            hookScreen();
+            hookCanvas();
+            hookWebGL();
+            hookAudio();
+            hookStorage();
+            hookCookie();
+            hookDate();
+            hookXHR();
+            hookFetch();
+            console.log('[HOOKS] All fingerprint and network hooks installed');
+        } catch (e) {
+            console.error('[HOOKS] Error installing hooks:', e);
+        }
+
+        // Add message to log
+        function addMessage(direction, data) {
+            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
+            messageLog.push({ direction, data, timestamp });
+
+            const messageList = document.getElementById('message-list');
+
+            // Clear placeholder
+            if (messageLog.length === 1) {
+                messageList.innerHTML = '';
+            }
+
+            const messageItem = document.createElement('div');
+            messageItem.className = `message-item ${direction}`;
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = `[${timestamp}] ${direction === 'sent' ? '📤 SENT' : '📥 RECEIVED'}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = JSON.stringify(data, null, 2);
+
+            messageItem.appendChild(timeDiv);
+            messageItem.appendChild(contentDiv);
+            messageList.appendChild(messageItem);
+
+            // Auto scroll to bottom
+            messageList.scrollTop = messageList.scrollHeight;
+        }
+
+        // Update status display
+        function updateStatus(message, type = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = 'Status: ' + message;
+            statusEl.className = 'status ' + type;
+            console.log('[STATUS]', message);
+        }
+
+        // Update cookies display
+        function updateCookies() {
+            const cookiesEl = document.getElementById('cookies');
+            const cookiesContent = document.getElementById('cookies-content');
+            if (Object.keys(window.__pxCookies).length > 0) {
+                cookiesEl.style.display = 'block';
+                cookiesContent.textContent = JSON.stringify(window.__pxCookies, null, 2);
+            }
+        }
+
+        // Listen for messages from iframe
+        window.addEventListener("message", (e) => {
+            try {
+                const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+                console.log('[MESSAGE]', data);
+
+                // Log received message
+                addMessage('received', data);
+
+                if (data.type === "cookie") {
+                    window.__pxCookies[data.name] = data.value;
+                    updateCookies();
+                    updateStatus('Cookie received: ' + data.name);
+                }
+
+                if (data.type === "succeeded") {
+                    setTimeout(() => {
+                        window.__pxResult = "succeeded";
+                        updateStatus('Challenge succeeded!', 'success');
+                        updateCookies();
+                    }, 500);
+                }
+
+                if (data.type === "failed") {
+                    window.__pxResult = "failed";
+                    updateStatus('Challenge failed', 'failed');
+                }
+            } catch (err) {
+                console.error('[ERROR]', err);
+            }
+        });
+
+        // Create and inject iframe
+        const iframe = document.createElement("iframe");
+        iframe.src = "https://iframe.hsprotect.net/index.html?app_id=PXzC5j78di";
+        iframe.style.cssText = "width:400px;height:400px;border:1px solid #ddd;border-radius:4px;";
+
+        document.getElementById('iframe-container').appendChild(iframe);
+        updateStatus('Loading iframe...');
+
+        iframe.onload = () => {
+            updateStatus('Iframe loaded, sending block message...');
+
+            const messageData = {
+                type: "block",
+                jsonResponse: {
+                    vid: params.vid,
+                    uuid: params.uuid
+                },
+                requestUrl: "https://signup.live.com/API/CreateAccount",
+            };
+
+            // Log sent message
+            addMessage('sent', messageData);
+
+            iframe.contentWindow.postMessage(
+                JSON.stringify(messageData),
+                "*"
+            );
+
+            updateStatus('Block message sent, waiting for captcha.js response...');
+        };
+
+        iframe.onerror = () => {
+            updateStatus('Failed to load iframe', 'failed');
+        };
+    </script>
+</body>
+</html>

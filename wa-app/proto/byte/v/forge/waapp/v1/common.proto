@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "ByteVForge.WaApp.V1";
+option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option java_multiple_files = true;
+option java_outer_classname = "WaAppCommonProto";
+option java_package = "com.bytevforge.waapp.v1";
+option php_namespace = "ByteVForge\\WaApp\\V1";
+
+message RequestContext {
+  string request_id = 1;
+  string actor_id = 3;
+  string correlation_id = 4;
+  string trace_id = 5;
+}
+
+enum WaErrorCode {
+  WA_ERROR_CODE_UNSPECIFIED = 0;
+  WA_ERROR_CODE_VALIDATION_FAILED = 1;
+  WA_ERROR_CODE_WA_ACCOUNT_NOT_FOUND = 2;
+  WA_ERROR_CODE_PROFILE_NOT_FOUND = 3;
+  WA_ERROR_CODE_PROTOCOL_PROFILE_NOT_FOUND = 4;
+  WA_ERROR_CODE_REGISTRATION_NOT_FOUND = 5;
+  WA_ERROR_CODE_MESSAGE_SESSION_NOT_FOUND = 6;
+  WA_ERROR_CODE_MESSAGE_NOT_FOUND = 7;
+  WA_ERROR_CODE_ROUTE_UNAVAILABLE = 8;
+  WA_ERROR_CODE_RATE_LIMITED = 9;
+  WA_ERROR_CODE_REJECTED = 10;
+  WA_ERROR_CODE_EXPIRED = 11;
+  WA_ERROR_CODE_CONFLICT = 12;
+  WA_ERROR_CODE_DECRYPTION_FAILED = 13;
+  WA_ERROR_CODE_UNSUPPORTED_OPERATION = 14;
+  WA_ERROR_CODE_INTERNAL = 15;
+}
+
+message WaError {
+  WaErrorCode code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+message PhoneTarget {
+  string e164_number = 1;
+  string country_calling_code = 2;
+  string national_number = 3;
+  string country_iso2 = 4;
+}
+
+message SensitiveText {
+  // Sensitive value returned only when the caller explicitly requests it.
+  string value = 1;
+  string redacted_value = 2;
+  string secret_ref = 3;
+}
+
+message AuditStamp {
+  google.protobuf.Timestamp created_at = 1;
+  google.protobuf.Timestamp updated_at = 2;
+}

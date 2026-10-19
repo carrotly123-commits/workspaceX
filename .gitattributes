@@ -1,0 +1,2 @@
+# Shell scripts must stay LF or they fail on Linux/macOS (`set: Illegal option -`).
+*.sh text eol=lf

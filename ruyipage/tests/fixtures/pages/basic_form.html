@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Basic Form</title>
+</head>
+<body>
+  <h1 id="page-title">Basic Form</h1>
+  <button id="click-btn" onclick="document.getElementById('click-result').textContent='clicked'">Click</button>
+  <div id="click-result">idle</div>
+
+  <input id="text-input" value="" />
+  <input id="email-input" type="text" inputmode="email" value="" />
+  <input id="search-input" type="search" value="" />
+  <textarea id="textarea-input"></textarea>
+  <button id="mirror-btn" onclick="document.getElementById('mirror').textContent=document.getElementById('text-input').value">Mirror</button>
+  <div id="mirror"></div>
+
+  <script>
+    window.__ruyi_fixture_ready = true;
+    window.__emailEvents = [];
+    window.__resetEmailEvents = function () {
+      const email = document.getElementById('email-input');
+      email.value = '';
+      window.__emailEvents = [];
+    };
+    ['pointerdown', 'mousedown', 'focus', 'pointerup', 'mouseup', 'click', 'keydown', 'keyup', 'input'].forEach((type) => {
+      document.getElementById('email-input').addEventListener(type, (event) => {
+        window.__emailEvents.push({
+          type,
+          key: event.key || null,
+          value: event.target.value,
+          time: performance.now(),
+          trusted: event.isTrusted
+        });
+      });
+    });
+  </script>
+</body>
+</html>

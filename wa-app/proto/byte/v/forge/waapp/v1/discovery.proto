@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "ByteVForge.WaApp.V1";
+option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option java_multiple_files = true;
+option java_outer_classname = "WaAppDiscoveryProto";
+option java_package = "com.bytevforge.waapp.v1";
+option php_namespace = "ByteVForge\\WaApp\\V1";
+
+service WaDiscoveryService {
+  rpc RegisterAppArtifact(RegisterAppArtifactRequest) returns (RegisterAppArtifactResponse);
+  rpc RecordProtocolProfile(RecordProtocolProfileRequest) returns (RecordProtocolProfileResponse);
+  rpc GetProtocolProfile(GetProtocolProfileRequest) returns (GetProtocolProfileResponse);
+}
+
+enum ProtocolProfileStatus {
+  PROTOCOL_PROFILE_STATUS_UNSPECIFIED = 0;
+  PROTOCOL_PROFILE_STATUS_DRAFT = 1;
+  PROTOCOL_PROFILE_STATUS_ACTIVE = 2;
+  PROTOCOL_PROFILE_STATUS_DEPRECATED = 3;
+}
+
+enum ProtocolCapability {
+  PROTOCOL_CAPABILITY_UNSPECIFIED = 0;
+  PROTOCOL_CAPABILITY_ACCOUNT_PROBE = 1;
+  PROTOCOL_CAPABILITY_CODE_REQUEST = 2;
+  PROTOCOL_CAPABILITY_CODE_SUBMIT = 3;
+  PROTOCOL_CAPABILITY_MESSAGE_SESSION = 4;
+  PROTOCOL_CAPABILITY_MESSAGE_ACK = 5;
+  PROTOCOL_CAPABILITY_ENCRYPTED_MESSAGE_DECRYPTION = 6;
+  PROTOCOL_CAPABILITY_CANDIDATE_EXTRACTION = 7;
+  PROTOCOL_CAPABILITY_ACCOUNT_SETTINGS = 8;
+}
+
+enum RegistrationFlowKind {
+  REGISTRATION_FLOW_KIND_UNSPECIFIED = 0;
+  REGISTRATION_FLOW_KIND_EXISTING_ACCOUNT = 1;
+  REGISTRATION_FLOW_KIND_NEW_ACCOUNT = 2;
+  REGISTRATION_FLOW_KIND_RECOVERY = 3;
+}
+
+enum MessageTransportKind {
+  MESSAGE_TRANSPORT_KIND_UNSPECIFIED = 0;
+  MESSAGE_TRANSPORT_KIND_LONG_CONNECTION = 1;
+  MESSAGE_TRANSPORT_KIND_POLLING = 2;
+}
+
+message AppArtifact {
+  string artifact_id = 1;
+  string label = 2;
+  string version_label = 3;
+  string sha256 = 4;
+  google.protobuf.Timestamp observed_at = 5;
+}
+
+message ProtocolProfile {
+  string protocol_profile_id = 1;
+  string app_artifact_id = 2;
+  string display_name = 3;
+  string app_version = 4;
+  ProtocolProfileStatus status = 5;
+  repeated ProtocolCapability capabilities = 6;
+  repeated RegistrationFlowKind registration_flows = 7;
+  repeated MessageTransportKind message_transports = 8;
+  google.protobuf.Timestamp discovered_at = 9;
+  AuditStamp audit = 10;
+}
+
+message RegisterAppArtifactRequest {
+  RequestContext context = 1;
+  string label = 2;
+  string version_label = 3;
+  string sha256 = 4;
+}
+
+message RegisterAppArtifactResponse {
+  AppArtifact artifact = 1;
+  WaError error = 2;
+}
+
+message RecordProtocolProfileRequest {
+  RequestContext context = 1;
+  string app_artifact_id = 2;
+  string display_name = 3;
+  string app_version = 4;
+  repeated ProtocolCapability capabilities = 5;
+  repeated RegistrationFlowKind registration_flows = 6;
+  repeated MessageTransportKind message_transports = 7;
+}
+
+message RecordProtocolProfileResponse {
+  ProtocolProfile protocol_profile = 1;
+  WaError error = 2;
+}
+
+message GetProtocolProfileRequest {
+  RequestContext context = 1;
+  string protocol_profile_id = 2;
+}
+
+message GetProtocolProfileResponse {
+  ProtocolProfile protocol_profile = 1;
+  WaError error = 2;
+}

@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "ByteVForge.WaApp.V1";
+option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option java_multiple_files = true;
+option java_outer_classname = "WaAppContactsProto";
+option java_package = "com.bytevforge.waapp.v1";
+option php_namespace = "ByteVForge\\WaApp\\V1";
+
+service WaContactService {
+  rpc ListWAContacts(ListWAContactsRequest) returns (ListWAContactsResponse);
+  rpc ResolveWAContacts(ResolveWAContactsRequest) returns (ResolveWAContactsResponse);
+  rpc DeleteWAContact(DeleteWAContactRequest) returns (DeleteWAContactResponse);
+}
+
+enum WAContactKind {
+  WA_CONTACT_KIND_UNSPECIFIED = 0;
+  WA_CONTACT_KIND_USER = 1;
+  WA_CONTACT_KIND_GROUP = 2;
+  WA_CONTACT_KIND_BUSINESS = 3;
+  WA_CONTACT_KIND_INTEROP = 4;
+  WA_CONTACT_KIND_SYSTEM = 5;
+}
+
+message WAContact {
+  string contact_id = 1;
+  string wa_account_id = 2;
+  string jid = 3;
+  string number = 4;
+  string display_name = 5;
+  string wa_name = 6;
+  string verified_name = 7;
+  WAContactKind kind = 8;
+  bool is_whatsapp_user = 9;
+  bool is_reachable = 10;
+  AuditStamp audit = 11;
+  string profile_picture_id = 12;
+  int32 message_count = 13;
+  int32 unread_count = 14;
+  google.protobuf.Timestamp last_message_at = 15;
+  string last_message_preview = 16;
+}
+
+message ListWAContactsRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  int32 limit = 3;
+  string cursor = 4;
+}
+
+message ListWAContactsResponse {
+  repeated WAContact contacts = 1;
+  string next_cursor = 2;
+  WaError error = 3;
+}
+
+message ResolveWAContactsRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  repeated string jids = 3;
+  int32 limit = 4;
+}
+
+message ResolveWAContactsResponse {
+  repeated WAContact contacts = 1;
+  int32 queried_count = 2;
+  int32 resolved_count = 3;
+  WaError error = 4;
+}
+
+message DeleteWAContactRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  string contact_ref = 3;
+}
+
+message DeleteWAContactResponse {
+  bool deleted = 1;
+  int32 deleted_message_count = 2;
+  WaError error = 3;
+}

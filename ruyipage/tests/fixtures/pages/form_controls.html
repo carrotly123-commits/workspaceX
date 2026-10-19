@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Form Controls</title>
+</head>
+<body>
+  <h1 id="form-title">Form Controls</h1>
+
+  <input id="text-input" type="text" value="" />
+  <input id="email-input" type="email" value="" />
+  <input id="password-input" type="password" value="" />
+  <textarea id="textarea"></textarea>
+
+  <label><input id="checkbox-a" type="checkbox" /> Checkbox A</label>
+  <label><input id="checkbox-b" type="checkbox" /> Checkbox B</label>
+
+  <label><input id="radio-a" type="radio" name="group-a" /> Radio A</label>
+  <label><input id="radio-b" type="radio" name="group-a" /> Radio B</label>
+
+  <select id="select-single">
+    <option value="">请选择</option>
+    <option value="opt1">Option 1</option>
+    <option value="opt2">Option 2</option>
+  </select>
+
+  <button id="submit-btn" onclick="submitForm()">提交</button>
+  <div id="form-result"></div>
+
+  <script>
+    function submitForm() {
+      const values = {
+        text: document.getElementById('text-input').value,
+        email: document.getElementById('email-input').value,
+        password: document.getElementById('password-input').value,
+        textarea: document.getElementById('textarea').value,
+        checkboxA: document.getElementById('checkbox-a').checked,
+        checkboxB: document.getElementById('checkbox-b').checked,
+        radioA: document.getElementById('radio-a').checked,
+        radioB: document.getElementById('radio-b').checked,
+        select: document.getElementById('select-single').value,
+      };
+      document.getElementById('form-result').textContent = JSON.stringify(values);
+    }
+    window.__ruyi_form_fixture_ready = true;
+  </script>
+</body>
+</html>

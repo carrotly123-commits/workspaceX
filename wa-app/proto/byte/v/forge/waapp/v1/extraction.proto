@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package byte.v.forge.waapp.v1;
+
+import "byte/v/forge/waapp/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "ByteVForge.WaApp.V1";
+option go_package = "github.com/byte-v-forge/wa-app/gen/go/byte/v/forge/waapp/v1;waappv1";
+option java_multiple_files = true;
+option java_outer_classname = "WaAppExtractionProto";
+option java_package = "com.bytevforge.waapp.v1";
+option php_namespace = "ByteVForge\\WaApp\\V1";
+
+service WaExtractionService {
+  rpc DecryptMessage(DecryptMessageRequest) returns (DecryptMessageResponse);
+  rpc ExtractCandidates(ExtractCandidatesRequest) returns (ExtractCandidatesResponse);
+  rpc ListAccountOtpMessages(ListAccountOtpMessagesRequest) returns (ListAccountOtpMessagesResponse);
+}
+
+enum WaOtpSource {
+  WA_OTP_SOURCE_UNSPECIFIED = 0;
+  WA_OTP_SOURCE_LONG_CONNECTION = 1;
+  WA_OTP_SOURCE_AUTO_EXTRACTION = 2;
+  WA_OTP_SOURCE_IMPORTED_HISTORY = 3;
+}
+
+enum DecryptionStatus {
+  DECRYPTION_STATUS_UNSPECIFIED = 0;
+  DECRYPTION_STATUS_PENDING = 1;
+  DECRYPTION_STATUS_DECRYPTED = 2;
+  DECRYPTION_STATUS_FAILED = 3;
+  DECRYPTION_STATUS_UNSUPPORTED = 4;
+}
+
+enum SessionCommitPolicy {
+  SESSION_COMMIT_POLICY_UNSPECIFIED = 0;
+  SESSION_COMMIT_POLICY_TRANSIENT = 1;
+  SESSION_COMMIT_POLICY_COMMIT_LEARNED_STATE = 2;
+}
+
+enum CandidateKind {
+  CANDIDATE_KIND_UNSPECIFIED = 0;
+  CANDIDATE_KIND_OTP = 1;
+  CANDIDATE_KIND_FLAG = 2;
+  CANDIDATE_KIND_CODE = 3;
+  CANDIDATE_KIND_TEXT = 4;
+}
+
+message DecryptedMessage {
+  string decrypted_message_id = 1;
+  string message_id = 2;
+  DecryptionStatus status = 3;
+  string plaintext_ref = 4;
+  // Sensitive. Populated only when explicitly requested for an authorized caller.
+  SensitiveText plaintext_text = 5;
+  google.protobuf.Timestamp decrypted_at = 6;
+  WaError last_error = 7;
+}
+
+message ExtractedCandidate {
+  string candidate_id = 1;
+  string message_id = 2;
+  string decrypted_message_id = 3;
+  CandidateKind kind = 4;
+  SensitiveText text = 5;
+  double confidence = 6;
+  google.protobuf.Timestamp extracted_at = 7;
+}
+
+message OtpMessage {
+  string otp_message_id = 1;
+  string wa_account_id = 2;
+  string client_profile_id = 3;
+  string registered_identity_id = 4;
+  string message_id = 5;
+  string candidate_id = 6;
+  WaOtpSource source = 7;
+  string source_party = 8;
+  SensitiveText otp = 9;
+  google.protobuf.Timestamp received_at = 10;
+  AuditStamp audit = 11;
+  google.protobuf.Timestamp expires_at = 12;
+}
+
+message DecryptMessageRequest {
+  RequestContext context = 1;
+  string message_id = 2;
+  SessionCommitPolicy session_commit_policy = 3;
+  bool include_sensitive_plaintext = 4;
+}
+
+message DecryptMessageResponse {
+  DecryptedMessage decrypted_message = 1;
+  WaError error = 2;
+}
+
+message ExtractCandidatesRequest {
+  RequestContext context = 1;
+  string message_id = 2;
+  string decrypted_message_id = 3;
+  repeated CandidateKind candidate_kinds = 4;
+  bool include_sensitive_values = 5;
+}
+
+message ExtractCandidatesResponse {
+  repeated ExtractedCandidate candidates = 1;
+  WaError error = 2;
+}
+
+message ListAccountOtpMessagesRequest {
+  RequestContext context = 1;
+  string wa_account_id = 2;
+  int32 limit = 3;
+  string cursor = 4;
+  bool include_sensitive_values = 5;
+}
+
+message ListAccountOtpMessagesResponse {
+  repeated OtpMessage otp_messages = 1;
+  string next_cursor = 2;
+  WaError error = 3;
+}

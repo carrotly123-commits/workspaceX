@@ -1,0 +1,16 @@
+{
+  "cdpUrl": "http://127.0.0.1:9222",
+  "headless": false,
+  "timeoutMs": 300000,
+  "delayBetweenMs": 5000,
+  "concurrency": 1,
+  "passwordLength": 16,
+  "emailProvider": "manual",
+  "emailFile": "./config/emails.txt",
+  "mailHubUrl": "http://127.0.0.1:3100",
+  "mailHubApiKey": "",
+  "mailHubProvider": "",
+  "mailHubDomain": "",
+  "storePath": "",
+  "tfgStorePath": ""
+}
