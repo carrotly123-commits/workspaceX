@@ -6,7 +6,7 @@
   "preferredMode": "semi",
   "needsEmail": true,
   "needsPhone": false,
-  "tips": "Copy this file and adjust selectors for your target site.",
+  "tips": "Copy this file and adjust selectors for your target site. Choose a non-analytics logged-in cookie or a logged-in-only visible selector as proof; if both are configured, both must match. Do not use a generic body selector.",
   "selectors": {
     "openSignup": ["a[href*='signup']", "button:has-text('Sign up')"],
     "email": ["#email", "input[name='email']", "input[type='email']"],
@@ -15,6 +15,6 @@
     "submit": ["button[type='submit']", "button:has-text('Sign up')"],
     "code": ["input[name='code']", "input[autocomplete='one-time-code']"]
   },
-  "successCookie": "session",
+  "successCookie": "replace-with-login-cookie-name",
   "emailFromHint": "example.com"
 }
