@@ -98,6 +98,30 @@ token-free-gateway start
 # 客户端 base_url → http://localhost:3456/v1
 ```
 
+### 检查页面与验证登录
+
+```bash
+npx tsx src/index.ts inspect https://chat.example.com/login
+npx tsx src/index.ts verify https://chat.example.com --success-cookie session
+# 或者使用只在登录后可见的选择器
+npx tsx src/index.ts verify https://chat.example.com --success-selector '[data-testid="account-menu"]'
+```
+
+- `inspect <platform|url>` 只报告页面候选项数量及歧义，不读取或输出凭据。它不能发现网站实际 API 或模型能力。
+- `verify <platform|url>` 只检查浏览器中已打开的目标标签页；不会捕获会话或导出凭据。必须配置 `--success-cookie <cookie名称>` 和/或 `--success-selector <CSS选择器>`。Cookie 按精确名称、非空且未过期匹配，支持 HttpOnly；选择器须匹配可见元素。若两项都配置，则两项都必须通过。
+- 通用站点需配置登录成功证明。建议用非分析类、确实仅登录后存在的 Cookie，或登录后专属且可见的元素；不要用通用 `body`。缺少证明或验证失败时应视为 `unverified`，不导出。Cookie 命中只证明配置的登录信号存在，不证明网关连通或模型可用。
+- `capture` 面向浏览器中已有的登录会话，不会替你创建邮箱。
+
+### GitHub OAuth（现有账号）
+
+```bash
+npx tsx src/index.ts register https://chat.example.com/signup --auth github --email existing-label --success-cookie actual_cookie --save-platform --mode semi --count 1
+```
+
+这是通过 GitHub 登录目标网站的单账号半自动流程。你必须在浏览器中手动登录已有 GitHub 用户并完成授权/同意；它不会创建 GitHub 账号。`--email existing-label` 是本地账号标签示例，也可填写你的已有账号邮箱；不会申请新邮箱或生成 GitHub 密码。入口缺失或有多个候选项时会停止并提示人工处理。`actual_cookie` 必须替换为目标站点的真实登录 Cookie 名称。
+
+严格证据校验覆盖通用适配器（URL、自定义配置和 GitHub 路径）；部分旧内置适配器的 `capture` 仍使用原有采集逻辑，不能据此推断已验证登录。共享注册流程已有的成功检测返回失败时，现在也会阻断采集。
+
 ### 4. 查看与导出
 
 ```bash
@@ -250,3 +274,24 @@ Chrome 未开调试端口，或 9222 被占用。用独立 `--user-data-dir` 再
 ## License
 
 MIT — 请负责任地使用。
+
+### 回归验证
+
+```bash
+npm test
+npm run typecheck
+# 可选：在本地调试浏览器中运行受控页面回归（不访问真实 GitHub）
+UR_TEST_CDP_URL=http://127.0.0.1:9222 UR_TEST_ORIGIN=http://127.0.0.1:3456 npm test
+```
+
+默认测试跳过浏览器用例；设置上述两个变量后，测试模拟 GitHub 入口、当前页/弹窗回调、歧义和登录证据失败。它不证明真实网站的 OAuth 授权或模型调用成功。
+
+### 前端报告查看（#2 输出格式）
+
+启动 Token-Free Gateway 后，从控制台顶部的「注册报告」进入 `/registrar`。该页面是独立于渠道管理的本地只读报告查看器，不需要先把账号导入网关。
+
+- 支持发现数组或 `discovered-sites.json`、单份 probe/plan JSON、pipeline 的精简摘要、`accounts.json` 和 `credentials-2api.json`。
+- 页面按发现、探测、策略、注册结果、凭证摘要分阶段展示；pipeline 的汇总数量不冒充逐条明细，策略评分和凭证质量评级不代表实际调用成功。
+- 文件只在浏览器内解析，不上传、不持久化。邮箱、密码、密钥、Token、请求头和 URL 路径不展示。可下载脱敏审阅摘要，但它不能替代原始凭证备份。
+- 每次导入替换当前报告；限制为 5 MB、2,000 条展示记录。CLI 的进度日志可能混在 stdout 中，导入时请仅提供完整 JSON；不支持 JSONL、keys 或 env 格式。
+- #2 没有任务控制 HTTP API，本页不启动注册、不签发凭证、不连接外部网站，也不自动挂载网关渠道。
