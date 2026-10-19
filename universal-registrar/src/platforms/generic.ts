@@ -25,7 +25,15 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { clickFirst, collectCookies, fillFirst } from "../core/browser.ts";
 import { handleCaptchaIfPresent } from "../core/captcha.ts";
-import type { PlatformAdapter, RegisterContext, RegisterResult, RegisterMode } from "../core/types.ts";
+import type {
+  CredentialHint,
+  PlatformAdapter,
+  RegisterContext,
+  RegisterMode,
+  RegisterResult,
+  SiteFrameworkType,
+  StrategyExecutionKind,
+} from "../core/types.ts";
 import { cookiesToString, nowIso, sleep } from "../core/utils.ts";
 import {
   BasePlatformAdapter,
@@ -35,6 +43,7 @@ import {
   handleEmailCode,
   semiAutoSignupFlow,
 } from "./base.ts";
+import { executeProtocolRegistration } from "./protocol.ts";
 
 export interface GenericPlatformConfig {
   id: string;
@@ -69,6 +78,20 @@ export interface GenericPlatformConfig {
   successCookie?: string;
   /** Host hint for email link extraction */
   emailFromHint?: string;
+  /** Optional detected site framework (e.g. "oneapi", "newapi", "voapi") */
+  framework?: SiteFrameworkType;
+  /** Optional strategy execution kind selected by planner */
+  strategyKind?: StrategyExecutionKind;
+  /** Optional protocol endpoints for fast HTTP registration + API key provisioning */
+  protocolEndpoints?: {
+    registerUrl?: string;
+    loginUrl?: string;
+    sendCodeUrl?: string;
+    tokenUrl?: string;
+    userSelfUrl?: string;
+  };
+  /** Optional credential capabilities discovered during probing */
+  credentialHints?: CredentialHint;
 }
 
 export function deriveDomainsFromUrl(rawUrl: string): {
@@ -137,6 +160,35 @@ export class GenericAdapter extends BasePlatformAdapter {
   }
 
   async register(ctx: RegisterContext): Promise<RegisterResult> {
+    // Fast path: if planner selected protocol-level registration (or protocolEndpoints are configured)
+    // and we are not in manual mode, attempt direct HTTP protocol registration + API key minting first.
+    if (
+      ctx.mode !== "manual" &&
+      (this.cfg.strategyKind === "api_protocol" || this.cfg.protocolEndpoints?.registerUrl)
+    ) {
+      const derived = deriveDomainsFromUrl(this.signupUrl);
+      const registerUrl =
+        this.cfg.protocolEndpoints?.registerUrl ?? `${derived.origin}/api/user/register`;
+      try {
+        const protoRes = await executeProtocolRegistration(ctx, {
+          origin: derived.origin,
+          framework: this.cfg.framework ?? "oneapi",
+          registerUrl,
+          loginUrl: this.cfg.protocolEndpoints?.loginUrl,
+          sendCodeUrl: this.cfg.protocolEndpoints?.sendCodeUrl,
+          requiresEmailVerification: this.needsEmail,
+        });
+        if (protoRes.success) {
+          return protoRes;
+        }
+      } catch (err) {
+        ctx.onProgress(
+          `Protocol registration fallback to browser (${err instanceof Error ? err.message : err})`,
+          "warn",
+        );
+      }
+    }
+
     const sel = this.cfg.selectors ?? {};
 
     return semiAutoSignupFlow(this, ctx, {
