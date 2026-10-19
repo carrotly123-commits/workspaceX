@@ -1,5 +1,6 @@
 # Workspace & IDE
-.hoplite/
+.hoplite/*
+!.hoplite/settings.json
 .DS_Store
 .idea/
 .vscode/
