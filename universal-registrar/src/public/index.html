@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Token-Free Gateway · 免 Token 渠道与对话控制台</title>
+  <style>
+    :root {
+      --bg: #f4f7f6;
+      --surface: #ffffff;
+      --surface-subtle: #f8faf9;
+      --border: #dce5e1;
+      --text: #16211e;
+      --text-secondary: #52635e;
+      --text-muted: #7b8c87;
+      --primary: #0d7f64;
+      --primary-hover: #096650;
+      --primary-soft: rgba(13, 127, 100, 0.1);
+      --danger: #c83250;
+      --danger-soft: rgba(200, 50, 80, 0.1);
+      --amber: #b4690e;
+      --amber-soft: rgba(180, 105, 14, 0.12);
+      --radius: 12px;
+      --shadow: 0 2px 10px rgba(16, 24, 40, 0.05);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+      max-width: 1360px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0d7f64, #14b8a6);
+      color: #fff;
+      font-weight: 800;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .brand h1 { font-size: 20px; font-weight: 700; }
+    .brand p { font-size: 13px; color: var(--text-secondary); }
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--surface-subtle);
+    }
+    .pill.ok { background: var(--primary-soft); color: var(--primary); border-color: rgba(13, 127, 100, 0.25); }
+    .pill.warn { background: var(--amber-soft); color: var(--amber); border-color: rgba(180, 105, 14, 0.25); }
+    .pill.err { background: var(--danger-soft); color: var(--danger); border-color: rgba(200, 50, 80, 0.25); }
+    .copy-box {
+      font-family: var(--mono);
+      cursor: pointer;
+      user-select: all;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 380px 1fr 420px;
+      gap: 20px;
+      align-items: start;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 1180px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .section-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 6px 0 14px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+    .section-banner h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .section-banner span {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .form-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .probe-box, .log-box, .code-preview {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-subtle);
+      padding: 10px 12px;
+      font-size: 12px;
+      max-height: 260px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    .log-box, .code-preview {
+      font-family: var(--mono);
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: #16211e;
+      color: #d8ede7;
+    }
+    .route-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      margin-top: 6px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--mono);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+    .badge.warn {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+    .badge.err {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .checkbox-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .checkbox-line input {
+      width: auto;
+      margin: 0;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+    .form-group { margin-bottom: 12px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      background: var(--surface-subtle);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      border-color: var(--primary);
+      background: #fff;
+    }
+    .form-group small {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-subtle);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: #eaeff0; }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-color: transparent;
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .channel-list { display: flex; flex-direction: column; gap: 12px; }
+    .channel-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: var(--surface-subtle);
+    }
+    .channel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .channel-name { font-weight: 700; font-size: 15px; }
+    .model-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .model-tag {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .model-tag:hover { border-color: var(--primary); color: var(--primary); }
+    .acct-list {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .acct-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .chat-box {
+      height: 320px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-subtle);
+      padding: 12px;
+      overflow-y: auto;
+      font-size: 13px;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+    .msg-user {
+      background: var(--primary-soft);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .msg-ai {
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #16211e;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-badge">TF</div>
+      <div>
+        <h1>Token-Free Gateway 控制台</h1>
+        <p>外部网站发现 → 探测注册途径 → 最优注册方案 → 大量并发注册 → 2API Key/Token 提取 → 免 Token OpenAI 网关</p>
+      </div>
+    </div>
+    <div class="status-strip">
+      <span class="pill" id="st-gateway">网关检测中...</span>
+      <span class="pill" id="st-browser">Chrome CDP 检测中...</span>
+      <span class="pill" id="st-registrar">2API 凭证池检测中...</span>
+      <span class="pill copy-box" onclick="copyApiBase()" title="点击复制 OpenAI 兼容接口地址">
+        API Base: <strong id="api-base-url">http://127.0.0.1:3456/v1</strong> 📋
+      </span>
+      <button type="button" class="btn btn-sm" onclick="loadOverview()">🔄 刷新状态</button>
+    </div>
+  </header>
+
+  <!-- ==================== 第一排：#2 五阶段自动注册机与 2API 凭证中心 ==================== -->
+  <div class="section-banner">
+    <h2>🚀 自动化注册流水线 & 2API 凭证中心 (Discover → Probe → Plan → Bulk Register → 2API Keys)</h2>
+    <span>支持外部自行发现 AI 站点、探测接口与验证码阻碍、自动优选协议/浏览器方案、高并发批量注册并铸造 sk-... Key</span>
+  </div>
+
+  <div class="grid">
+    <!-- 阶段 1-3：外部网站发现、探测注册途径、选择最优注册方案 -->
+    <section class="card">
+      <div class="card-title">
+        <span>🔍 1. 外部网站发现 & 探测选优</span>
+        <span class="badge" id="discover-count-badge">已发现 0 站</span>
+      </div>
+      <p class="card-desc">
+        输入外部发现的 AI 网站或导航站网址（支持多行），探测其框架（NewAPI / OneAPI / Web AI）、注册途径与验证码阻碍，自动选出最优注册方案。
+      </p>
+      <div class="form-group">
+        <label>目标外部网站 URL / 导航页地址 *</label>
+        <textarea id="reg-discover-input" rows="3" placeholder="每行一个网址，例如：&#10;https://api.example.com&#10;https://chat.example.org/register"></textarea>
+      </div>
+      <label class="checkbox-line">
+        <input type="checkbox" id="reg-discover-crawl" />
+        <span>爬取页面内包含的所有外部 AI 网站链接 (--crawl)</span>
+      </label>
+      <label class="checkbox-line">
+        <input type="checkbox" id="reg-save-platform" checked />
+        <span>选出最优方案后自动保存至 config/platforms/*.json</span>
+      </label>
+      <div class="btn-row">
+        <button type="button" class="btn btn-sm" id="btn-discover" onclick="runDiscoverSites()">🔍 1. 发现网站</button>
+        <button type="button" class="btn btn-sm" id="btn-probe" onclick="runProbeSite()">🛰️ 2. 探测途径</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-plan" onclick="runPlanStrategy()">🧠 3. 选最优方案</button>
+      </div>
+      <div id="reg-probe-result" class="probe-box">
+        <div style="color:var(--text-muted)">填入网址后点击上方按钮，在此查看站点框架、候选注册途径评分与最优执行方案...</div>
+      </div>
+    </section>
+
+    <!-- 阶段 4：大量并发注册 & 一键五阶段全链路流水线 -->
+    <section class="card">
+      <div class="card-title">
+        <span>⚡ 2. 大量并发注册 & 全链路流水线</span>
+        <span class="badge" id="job-status-badge">空闲</span>
+      </div>
+      <p class="card-desc">
+        使用选定的最优方案（纯 HTTP 协议极速注册或隔离浏览器自动流）批量注册账号，自动换新邮箱重试并铸造每个账号的专属 Key/Token。
+      </p>
+      <div class="form-group">
+        <label>目标网站 URL 或平台 ID *</label>
+        <input id="reg-target" list="builtin-providers" placeholder="例如 https://api.example.com 或 deepseek" />
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>批量注册数量 (Count)</label>
+          <input type="number" id="reg-count" value="5" min="1" max="500" />
+        </div>
+        <div class="form-group">
+          <label>并发工作数 (Concurrency)</label>
+          <input type="number" id="reg-concurrency" value="3" min="1" max="20" />
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>邮箱源 (Email Provider)</label>
+          <select id="reg-email-provider">
+            <option value="auto">auto (MailHub → Mail.tm 自动切换)</option>
+            <option value="mailhub">mailhub (本地 Mail Hub :3100)</option>
+            <option value="mailtm">mailtm (免配置在线临时邮箱)</option>
+            <option value="manual">manual (手动输入)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>执行模式 / 失败重试</label>
+          <div style="display:flex;gap:6px">
+            <select id="reg-mode" style="flex:1">
+              <option value="">自动按最优方案</option>
+              <option value="auto">auto (全自动)</option>
+              <option value="semi">semi (半自动)</option>
+              <option value="manual">manual (仅抓会话)</option>
+            </select>
+            <input type="number" id="reg-retries" value="1" min="0" max="5" style="width:68px" title="单账号失败自动换邮箱重试次数" />
+          </div>
+        </div>
+      </div>
+      <label class="checkbox-line">
+        <input type="checkbox" id="reg-auto-plan" checked />
+        <span>注册前自动探测注册途径并应用最优方案 (--auto-plan)</span>
+      </label>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btn-bulk-register" style="flex:1" onclick="runBulkRegister()">⚡ 启动批量注册</button>
+        <button type="button" class="btn" id="btn-full-pipeline" style="flex:1;border-color:var(--primary);color:var(--primary)" onclick="runFullPipelineUi()">🔥 一键五阶段流水线</button>
+      </div>
+      <div id="reg-job-box" class="log-box" style="height:175px">等待启动批量注册或全链路流水线任务...</div>
+    </section>
+
+    <!-- 阶段 5：提供有意义的 2API 凭证（API Key / AccessToken / ReadyHeaders） -->
+    <section class="card">
+      <div class="card-title">
+        <span>🔑 3. 2API 有意义凭证中心</span>
+        <span id="cred-summary" style="font-size:12px;color:var(--primary);font-weight:600">0 Key / 0 Token</span>
+      </div>
+      <p class="card-desc">
+        为每个注册成功的账号提供可直接用于自写 2API 的 <code>apiKey (sk-...)</code>、<code>accessToken</code> 与即插即用请求头 <code>readyHeaders</code>。
+      </p>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>按站点/平台筛选</label>
+          <input id="cred-platform-filter" placeholder="留空显示全部平台" onchange="loadCredentialsCenter()" />
+        </div>
+        <div class="form-group">
+          <label>2API 导出格式</label>
+          <select id="cred-format" onchange="loadCredentialsCenter()">
+            <option value="json">json (2API 结构化凭证包)</option>
+            <option value="keys">keys (纯 sk-... / Token 每行一个)</option>
+            <option value="jsonl">jsonl (按行 JSON 流)</option>
+            <option value="env">env (环境变量 POOL_KEYS=...)</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-bottom:10px">
+        <button type="button" class="btn btn-sm" onclick="copyFormattedCredentials()">📋 复制凭证内容</button>
+        <button type="button" class="btn btn-sm" onclick="downloadFormattedCredentials()">⬇️ 下载凭证文件</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="exportAndSyncCredentials()">💾 落盘并同步至网关</button>
+      </div>
+      <div id="cred-account-list" class="probe-box" style="max-height:135px;margin-top:0">
+        <div style="color:var(--text-muted)">暂无已产出的账号凭证...</div>
+      </div>
+      <div id="cred-preview" class="code-preview" style="height:110px;margin-top:8px">// 2API 凭证预览</div>
+    </section>
+  </div>
+
+  <!-- ==================== 第二排：免 Token 网关渠道管理与在线对话测试 ==================== -->
+  <div class="section-banner">
+    <h2>💬 免 Token 网关渠道池 & OpenAI 在线对话测试台 (Playground)</h2>
+    <span>支持手动粘贴 Cookie 挂载任意网页 AI、多账号轮询防 429 限流、直接测试 /v1/chat/completions 流式响应</span>
+  </div>
+
+  <div class="grid">
+    <!-- 左栏：快速添加新渠道或新账号 -->
+    <section class="card">
+      <div class="card-title">① 填入新渠道 / 追加账号池</div>
+      <p class="card-desc">
+        无论是内置 13 大平台，还是你自己新发现的任意 AI 网站，填入网址与 Cookie 即可立即作为 OpenAI 模型使用。同一渠道重复提交不同邮箱会自动加入多账号轮询池。
+      </p>
+      <form onsubmit="return saveChannelAccount(event)">
+        <div class="form-group">
+          <label>选择或输入新渠道 ID / 网址 *</label>
+          <input id="f-provider" list="builtin-providers" placeholder="例如 deepseek-web 或 https://chat.example.com" required />
+          <datalist id="builtin-providers">
+            <option value="deepseek-web">DeepSeek (内置)</option>
+            <option value="claude-web">Claude (内置)</option>
+            <option value="chatgpt-web">ChatGPT (内置)</option>
+            <option value="gemini-web">Gemini (内置)</option>
+            <option value="qwen-cn-web">通义千问 CN (内置)</option>
+            <option value="qwen-web">Qwen Intl (内置)</option>
+            <option value="doubao-web">豆包 Doubao (内置)</option>
+            <option value="kimi-web">Kimi (内置)</option>
+            <option value="glm-web">智谱清言 GLM (内置)</option>
+            <option value="grok-web">Grok (内置)</option>
+            <option value="perplexity-web">Perplexity (内置)</option>
+            <option value="xiaomimo-web">小米 MiMo (内置)</option>
+          </datalist>
+          <small>新渠道可直接填名字（如 <code>my-ai</code>）或直接粘网址</small>
+        </div>
+        <div class="form-group">
+          <label>新渠道对话网址（内置渠道可留空）</label>
+          <input id="f-url" placeholder="https://chat.example.com" />
+        </div>
+        <div class="form-group">
+          <label>账号标识 / 邮箱（用于多账号池区分不同账号）</label>
+          <input id="f-email" placeholder="例如 account1@example.com（可留空）" />
+        </div>
+        <div class="form-group">
+          <label>浏览器 Cookie 凭证 *</label>
+          <textarea id="f-cookie" rows="3" placeholder="从浏览器 F12 复制的 Cookie 字符串，如 session=xxx; token=yyy" required></textarea>
+        </div>
+        <div class="form-group">
+          <label>Bearer Token（可选，如 DeepSeek userToken）</label>
+          <input id="f-bearer" placeholder="可选 Bearer Token" />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">💾 保存并立即挂载渠道/账号</button>
+      </form>
+    </section>
+
+    <!-- 中栏：已接入渠道与多账号池 -->
+    <section class="card">
+      <div class="card-title">
+        <span>② 已接入渠道 & 多账号池</span>
+        <span id="channel-summary" style="font-size:12px;color:var(--text-secondary);font-weight:500"></span>
+      </div>
+      <p class="card-desc">点击任意模型标签即可填入右侧测试台；同一渠道有多个账号时将自动轮询并在 429/过期时自动切换。</p>
+      <div id="channel-list" class="channel-list">
+        <div style="color:var(--text-muted);font-size:13px">正在加载渠道数据...</div>
+      </div>
+    </section>
+
+    <!-- 右栏：在线对话测试台 Playground -->
+    <section class="card">
+      <div class="card-title">
+        <span>③ 在线对话测试 (Playground)</span>
+        <button type="button" class="btn btn-sm" onclick="clearChat()">清空</button>
+      </div>
+      <p class="card-desc">直接调用本机 <code>POST /v1/chat/completions</code> 接口测试流式响应。</p>
+      <div class="form-group">
+        <label>当前测试模型</label>
+        <input id="chat-model" placeholder="点击左侧模型标签或直接输入模型名" />
+      </div>
+      <div id="chat-box" class="chat-box">在这里输入一句话，立即测试你的免 Token 渠道是否畅通。</div>
+      <form onsubmit="return sendTestChat(event)" style="display:flex;gap:8px">
+        <input id="chat-input" placeholder="输入测试消息，如：你好，请用一句话介绍自己" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px" required />
+        <button type="submit" class="btn btn-primary" id="chat-send-btn">发送</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    document.getElementById('api-base-url').textContent = location.origin + '/v1';
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show';
+      setTimeout(() => { el.className = 'toast'; }, 2600);
+    }
+
+    function copyApiBase() {
+      const url = location.origin + '/v1';
+      navigator.clipboard?.writeText(url).catch(() => {});
+      showToast('已复制接口地址: ' + url);
+    }
+
+    function selectModel(modelId) {
+      document.getElementById('chat-model').value = modelId;
+      showToast('已选中测试模型: ' + modelId);
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+
+    let latestCredentialText = '';
+    let activeJobTimer = null;
+
+    function copyTextToClipboard(text, label) {
+      navigator.clipboard.writeText(String(text || ''));
+      showToast(`已复制 ${label || '内容'}`);
+    }
+
+    function useTargetForRegister(targetUrlOrId, recConcurrency) {
+      document.getElementById('reg-target').value = targetUrlOrId;
+      if (recConcurrency) {
+        document.getElementById('reg-concurrency').value = String(recConcurrency);
+      }
+      showToast(`已填入目标站点: ${targetUrlOrId}`);
+    }
+
+    function renderDiscoveredSites(sites) {
+      const box = document.getElementById('reg-probe-result');
+      document.getElementById('discover-count-badge').textContent = `已发现 ${sites.length} 站`;
+      if (!sites.length) {
+        box.innerHTML = '<div style="color:var(--text-muted)">未发现有效外部站点，请检查输入的网址。</div>';
+        return;
+      }
+      box.innerHTML = sites.map((s) => {
+        const fwBadge = `<span class="badge">${esc(s.framework)}</span>`;
+        const reachBadge = s.reachable
+          ? '<span class="badge">可达</span>'
+          : '<span class="badge err">不可达</span>';
+        const oaiBadge = s.openAiCompatible ? '<span class="badge">/v1/models</span>' : '';
+        const signupUrl = s.signupCandidates?.[0] || s.url;
+        return `<div class="route-item">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            <strong>${esc(s.title || s.id)}</strong>
+            <div>${fwBadge} ${reachBadge} ${oaiBadge}</div>
+          </div>
+          <div style="color:var(--text-secondary);margin-top:4px;word-break:break-all">注册入口: <code>${esc(signupUrl)}</code></div>
+          <div class="btn-row" style="margin-top:6px">
+            <button type="button" class="btn btn-sm" onclick="probeSpecificTarget('${esc(signupUrl)}')">🛰️ 探测此站</button>
+            <button type="button" class="btn btn-sm" onclick="planSpecificTarget('${esc(signupUrl)}')">🧠 选最优方案</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="useTargetForRegister('${esc(signupUrl)}')">➡️ 填入注册</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderProbeReport(report) {
+      const box = document.getElementById('reg-probe-result');
+      const openBadge = report.registrationOpen
+        ? '<span class="badge">开放注册</span>'
+        : '<span class="badge err">注册已关闭</span>';
+      const keyBadge = report.credentialHints?.supportsApiKeyCreation
+        ? '<span class="badge">支持自动铸造 sk- Key</span>'
+        : `<span class="badge warn">凭证: ${esc(report.credentialHints?.expectedAuthType || 'cookie')}</span>`;
+
+      const routesHtml = (report.routes || []).map((r) => {
+        const scoreClass = r.feasibilityScore >= 75 ? '' : r.feasibilityScore >= 45 ? 'warn' : 'err';
+        return `<div class="route-item">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>途径: ${esc(r.type)} (${esc(r.method)})</strong>
+            <span class="badge ${scoreClass}">可行性 ${r.feasibilityScore}/100</span>
+          </div>
+          <div style="color:var(--text-secondary);margin-top:3px">
+            邮箱验证: ${r.requiresEmailVerification ? '是' : '免验证'} · 手机验证: ${r.requiresPhone ? '是' : '否'} · 验证码: <code>${esc(r.captchaType)}</code>
+          </div>
+          <div style="color:var(--text-muted);margin-top:2px">${esc((r.notes || []).join('；'))}</div>
+        </div>`;
+      }).join('');
+
+      box.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          <strong>${esc(report.platformId)} (${esc(report.framework)})</strong>
+          <div>${openBadge} ${keyBadge}</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);word-break:break-all">入口: <code>${esc(report.signupUrl)}</code></div>
+        ${routesHtml || '<div style="color:var(--text-muted);margin-top:6px">未探测到可用途径</div>'}
+        <div class="btn-row" style="margin-top:8px">
+          <button type="button" class="btn btn-primary btn-sm" onclick="planSpecificTarget('${esc(report.signupUrl)}')">🧠 生成最优注册方案</button>
+          <button type="button" class="btn btn-sm" onclick="useTargetForRegister('${esc(report.signupUrl)}')">➡️ 填入右侧注册</button>
+        </div>
+      `;
+    }
+
+    function renderStrategyPlan(plan) {
+      const box = document.getElementById('reg-probe-result');
+      const scoreClass = plan.score >= 75 ? '' : plan.score >= 45 ? 'warn' : 'err';
+      box.innerHTML = `
+        <div class="route-item" style="border-color:var(--primary)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            <strong>✅ 最优方案: ${esc(plan.strategyKind)}</strong>
+            <span class="badge ${scoreClass}">评分 ${plan.score}/100</span>
+          </div>
+          <div style="margin-top:4px;color:var(--text-secondary)">
+            选中途径: <code>${esc(plan.chosenRoute?.type)}</code> · 模式: <code>${esc(plan.mode)}</code> · 推荐并发: <strong>${plan.recommendedConcurrency}</strong>
+          </div>
+          <div style="margin-top:4px;color:var(--text-muted)">
+            ${esc((plan.reasoning || []).join(' '))}
+          </div>
+          <div class="btn-row" style="margin-top:8px">
+            <button type="button" class="btn btn-primary btn-sm" onclick="useTargetForRegister('${esc(plan.signupUrl)}', ${plan.recommendedConcurrency || 1})">⚡ 立即应用此方案去批量注册</button>
+          </div>
+        </div>
+      `;
+      useTargetForRegister(plan.signupUrl, plan.recommendedConcurrency);
+    }
+
+    function getPrimaryInputUrl() {
+      const raw = document.getElementById('reg-discover-input').value.trim();
+      const first = raw.split(/[\r\n,]+/).map((s) => s.trim()).find(Boolean);
+      return first || document.getElementById('reg-target').value.trim();
+    }
+
+    async function runDiscoverSites() {
+      const raw = document.getElementById('reg-discover-input').value.trim();
+      if (!raw) {
+        showToast('请先输入待发现的网站 URL 或导航页网址');
+        return;
+      }
+      const btn = document.getElementById('btn-discover');
+      btn.disabled = true;
+      try {
+        const crawl = document.getElementById('reg-discover-crawl').checked;
+        const res = await fetch('/api/registrar/discover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inputs: raw, crawlDirectoryPages: crawl }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '发现站点失败');
+        renderDiscoveredSites(data.sites || []);
+        if (data.sites?.[0]?.signupCandidates?.[0]) {
+          document.getElementById('reg-target').value = data.sites[0].signupCandidates[0];
+        }
+        showToast(`成功发现 ${(data.sites || []).length} 个外部站点`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function probeSpecificTarget(target) {
+      const url = target || getPrimaryInputUrl();
+      if (!url) {
+        showToast('请先输入目标网站 URL');
+        return;
+      }
+      const btn = document.getElementById('btn-probe');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/registrar/probe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: url }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '探测失败');
+        renderProbeReport(data.report);
+        showToast(`完成探测: ${data.report.platformId}`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runProbeSite() {
+      await probeSpecificTarget(getPrimaryInputUrl());
+    }
+
+    async function planSpecificTarget(target) {
+      const url = target || getPrimaryInputUrl();
+      if (!url) {
+        showToast('请先输入目标网站 URL');
+        return;
+      }
+      const btn = document.getElementById('btn-plan');
+      btn.disabled = true;
+      try {
+        const savePlatform = document.getElementById('reg-save-platform').checked;
+        const maxConcurrency = Number(document.getElementById('reg-concurrency').value || 3);
+        const res = await fetch('/api/registrar/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: url, savePlatform, maxConcurrency }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '规划方案失败');
+        renderStrategyPlan(data.plan);
+        showToast(`最优方案: ${data.plan.strategyKind} (${data.plan.score}分)`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runPlanStrategy() {
+      await planSpecificTarget(getPrimaryInputUrl());
+    }
+
+    function renderJobState(job) {
+      const badge = document.getElementById('job-status-badge');
+      const box = document.getElementById('reg-job-box');
+      if (!job) return;
+      badge.textContent = job.status === 'running' ? '运行中...' : job.status === 'completed' ? '已完成' : '失败';
+      badge.className = `badge ${job.status === 'completed' ? '' : job.status === 'running' ? 'warn' : 'err'}`;
+
+      const lines = (job.logs || []).map((l) => `[${l.time.slice(11, 19)}] [${l.level.toUpperCase()}] ${l.message}`);
+      if (job.summary) {
+        lines.push(
+          `\n=== 批量注册汇总 (${job.summary.platformId}) ===`,
+          `成功: ${job.summary.succeeded}/${job.summary.totalRequested} | 铸造 sk- Key: ${job.summary.apiKeysMinted} | Bearer Token: ${job.summary.bearerTokensCaptured} | 耗时: ${job.summary.durationMs}ms`,
+        );
+      }
+      if (job.pipelineResult) {
+        lines.push(
+          `\n=== 全链路五阶段流水线完成 ===`,
+          `发现站点: ${job.pipelineResult.discovered?.length || 0} | 导出有效账号: ${job.pipelineResult.exportedCredentials?.totalAccounts || 0} | 铸造 sk- Key: ${job.pipelineResult.exportedCredentials?.totalApiKeys || 0}`,
+        );
+      }
+      if (job.error) {
+        lines.push(`\n❌ 错误: ${job.error}`);
+      }
+      box.textContent = lines.join('\n') || '任务已启动，正在等待日志输出...';
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function pollJobUntilDone(jobId) {
+      if (activeJobTimer) clearInterval(activeJobTimer);
+      activeJobTimer = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/registrar/jobs/${encodeURIComponent(jobId)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.job) {
+            renderJobState(data.job);
+            if (data.job.status !== 'running') {
+              clearInterval(activeJobTimer);
+              activeJobTimer = null;
+              await loadOverview();
+              await loadCredentialsCenter();
+              showToast(data.job.status === 'completed' ? '✅ 注册任务已完成并同步凭证！' : `❌ 任务失败: ${data.job.error || ''}`);
+            }
+          }
+        } catch {}
+      }, 1000);
+    }
+
+    async function runBulkRegister() {
+      const target = document.getElementById('reg-target').value.trim() || getPrimaryInputUrl();
+      if (!target) {
+        showToast('请先输入或选择目标网站 URL / 平台 ID');
+        return;
+      }
+      const count = Math.max(1, Number(document.getElementById('reg-count').value || 1));
+      const concurrency = Math.max(1, Number(document.getElementById('reg-concurrency').value || 1));
+      const maxRetries = Math.max(0, Number(document.getElementById('reg-retries').value || 0));
+      const emailProvider = document.getElementById('reg-email-provider').value;
+      const mode = document.getElementById('reg-mode').value || undefined;
+      const autoPlan = document.getElementById('reg-auto-plan').checked;
+      const savePlatform = document.getElementById('reg-save-platform').checked;
+
+      const btn = document.getElementById('btn-bulk-register');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/registrar/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            platform: target,
+            count,
+            concurrency,
+            maxRetries,
+            emailProvider,
+            mode,
+            autoPlan,
+            savePlatform,
+            async: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '启动批量注册失败');
+        renderJobState(data.job);
+        pollJobUntilDone(data.jobId);
+        showToast(`已启动批量注册任务 (${count} 个账号)`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runFullPipelineUi() {
+      const rawInputs = document.getElementById('reg-discover-input').value.trim() || document.getElementById('reg-target').value.trim();
+      if (!rawInputs) {
+        showToast('请在左侧或当前框输入至少一个目标网站 URL');
+        return;
+      }
+      const countPerSite = Math.max(1, Number(document.getElementById('reg-count').value || 1));
+      const concurrency = Math.max(1, Number(document.getElementById('reg-concurrency').value || 1));
+      const maxRetries = Math.max(0, Number(document.getElementById('reg-retries').value || 0));
+      const emailProvider = document.getElementById('reg-email-provider').value;
+      const crawlDirectoryPages = document.getElementById('reg-discover-crawl').checked;
+      const savePlatform = document.getElementById('reg-save-platform').checked;
+
+      const btn = document.getElementById('btn-full-pipeline');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/registrar/pipeline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            inputs: rawInputs,
+            countPerSite,
+            concurrency,
+            maxRetries,
+            emailProvider,
+            crawlDirectoryPages,
+            savePlatform,
+            async: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '启动全链路流水线失败');
+        renderJobState(data.job);
+        pollJobUntilDone(data.jobId);
+        showToast('🔥 已启动五阶段全链路流水线任务');
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadCredentialsCenter() {
+      try {
+        const platform = document.getElementById('cred-platform-filter').value.trim();
+        const format = document.getElementById('cred-format').value;
+        const qs = new URLSearchParams({ format });
+        if (platform) qs.set('platform', platform);
+
+        const res = await fetch(`/api/registrar/credentials?${qs.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const bundle = data.bundle || { totalAccounts: 0, totalApiKeys: 0, totalBearerTokens: 0, platforms: {} };
+        latestCredentialText = data.content || '';
+
+        document.getElementById('cred-summary').textContent =
+          `${bundle.totalAccounts} 账号 · ${bundle.totalApiKeys} sk-Key · ${bundle.totalBearerTokens} Token`;
+        const stReg = document.getElementById('st-registrar');
+        stReg.textContent = `2API 凭证池: ${bundle.totalApiKeys} Key / ${bundle.totalAccounts} 账号`;
+        stReg.className = `pill ${bundle.totalAccounts > 0 ? 'ok' : 'warn'}`;
+
+        document.getElementById('cred-preview').textContent =
+          latestCredentialText || '// 暂无凭证数据，请先运行批量注册或流水线';
+
+        const allAccounts = Object.values(bundle.platforms || {}).flatMap((p) => p.accounts || []);
+        const listEl = document.getElementById('cred-account-list');
+        if (!allAccounts.length) {
+          listEl.innerHTML = '<div style="color:var(--text-muted)">暂无已产出的 2API 账号凭证...</div>';
+          return;
+        }
+        listEl.innerHTML = allAccounts.map((a) => {
+          const secretLabel = a.apiKey
+            ? `Key: ${a.apiKey.slice(0, 16)}...`
+            : a.accessToken
+              ? `Token: ${a.accessToken.slice(0, 16)}...`
+              : `Session: ${a.primarySecret.slice(0, 16)}...`;
+          const headersJson = JSON.stringify(a.readyHeaders || {});
+          return `<div class="route-item" style="margin-top:4px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+              <strong>[${esc(a.platformId)}] ${esc(a.email)}</strong>
+              <span class="badge">${esc(a.authType)}</span>
+            </div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text-secondary);margin-top:3px">
+              ${esc(secretLabel)} ${a.apiBaseUrl ? `· ${esc(a.apiBaseUrl)}` : ''}
+            </div>
+            <div class="btn-row" style="margin-top:5px">
+              <button type="button" class="btn btn-sm" onclick='copyTextToClipboard(${JSON.stringify(a.primarySecret)}, "核心凭证")'>复制 Key/Token</button>
+              <button type="button" class="btn btn-sm" onclick='copyTextToClipboard(${JSON.stringify(headersJson)}, "readyHeaders")'>复制 Headers</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch {}
+    }
+
+    function copyFormattedCredentials() {
+      if (!latestCredentialText) {
+        showToast('暂无可复制的凭证内容');
+        return;
+      }
+      copyTextToClipboard(latestCredentialText, '2API 凭证');
+    }
+
+    function downloadFormattedCredentials() {
+      if (!latestCredentialText) {
+        showToast('暂无可下载的凭证内容');
+        return;
+      }
+      const format = document.getElementById('cred-format').value;
+      const ext = format === 'keys' ? 'txt' : format === 'jsonl' ? 'jsonl' : format === 'env' ? 'env' : 'json';
+      const blob = new Blob([latestCredentialText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `credentials-2api.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast(`已下载 credentials-2api.${ext}`);
+    }
+
+    async function exportAndSyncCredentials() {
+      try {
+        const platform = document.getElementById('cred-platform-filter').value.trim() || undefined;
+        const format = document.getElementById('cred-format').value;
+        const res = await fetch('/api/registrar/credentials/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform, format, syncTfg: true }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '导出失败');
+        await loadOverview();
+        await loadCredentialsCenter();
+        showToast(`已保存至 ${data.filePath} 并同步 ${data.exportedTfgCount} 个账号到网关！`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      }
+    }
+
+    async function loadOverview() {
+      try {
+        const [healthRes, adminRes, regRes] = await Promise.all([
+          fetch('/health').catch(() => null),
+          fetch('/api/admin/channels').catch(() => null),
+          fetch('/api/registrar/status').catch(() => null),
+        ]);
+        const health = healthRes && healthRes.ok ? await healthRes.json() : { models: 0, browser: 'disconnected' };
+        const data = adminRes && adminRes.ok ? await adminRes.json() : { channels: [] };
+        if (regRes && regRes.ok) {
+          const regData = await regRes.json();
+          document.getElementById('discover-count-badge').textContent =
+            `已发现 ${regData.stats?.discoveredCount || 0} 站`;
+        }
+
+        const gwEl = document.getElementById('st-gateway');
+        gwEl.textContent = '网关状态: 运行中 (' + (data.channels?.length || 0) + ' 渠道 / ' + (health.models || 0) + ' 模型)';
+        gwEl.className = 'pill ok';
+
+        const brEl = document.getElementById('st-browser');
+        if (health.browser === 'connected') {
+          brEl.textContent = 'Chrome CDP: 已连接';
+          brEl.className = 'pill ok';
+        } else {
+          brEl.textContent = 'Chrome CDP: 未连接 (请运行 make chrome)';
+          brEl.className = 'pill warn';
+        }
+
+        renderChannels(data.channels || []);
+      } catch (e) {
+        showToast('加载状态失败: ' + e.message);
+      }
+    }
+
+    function renderChannels(channels) {
+      const listEl = document.getElementById('channel-list');
+      const summaryEl = document.getElementById('channel-summary');
+      const totalAccounts = channels.reduce((s, c) => s + (c.accounts?.length || 0), 0);
+      summaryEl.textContent = `共 ${channels.length} 个已授权渠道 · ${totalAccounts} 个账号在池`;
+
+      if (!channels.length) {
+        listEl.innerHTML = `<div style="padding:18px;border:1px dashed var(--border);border-radius:10px;color:var(--text-secondary);font-size:13px">
+          当前还没有已授权渠道。<br/>👉 你可以在左侧表单直接填入任意渠道 Cookie，或在终端执行 <code>make capture PLATFORM=claude</code>。
+        </div>`;
+        return;
+      }
+
+      const chatModelInput = document.getElementById('chat-model');
+      if (!chatModelInput.value && channels[0]?.models?.[0]?.id) {
+        chatModelInput.value = channels[0].models[0].id;
+      }
+
+      listEl.innerHTML = channels.map(ch => {
+        const modelsHtml = (ch.models || []).map(m =>
+          `<span class="model-tag" onclick="selectModel('${esc(m.id)}')" title="点击用于右侧对话测试">${esc(m.id)}</span>`
+        ).join('');
+        const acctsHtml = (ch.accounts || []).map(a =>
+          `<div class="acct-row">
+            <span>👤 <strong>${esc(a.email || a.id)}</strong> <span style="color:var(--text-muted)">(${esc(a.updatedAt?.slice(0, 19).replace('T', ' ') || '')})</span></span>
+            <button class="btn btn-danger" onclick="removeAccount('${esc(ch.id)}','${esc(a.id)}')">移除</button>
+          </div>`
+        ).join('');
+        return `<div class="channel-item">
+          <div class="channel-head">
+            <div>
+              <span class="channel-name">${esc(ch.name || ch.id)}</span>
+              <span style="font-size:12px;color:var(--text-muted);margin-left:6px">(${esc(ch.id)})</span>
+            </div>
+            <span class="pill ok" style="padding:2px 8px;font-size:11px">${(ch.accounts || []).length} 账号轮询中</span>
+          </div>
+          <div class="model-tags">${modelsHtml}</div>
+          <div class="acct-list">${acctsHtml}</div>
+        </div>`;
+      }).join('');
+    }
+
+    async function saveChannelAccount(e) {
+      e.preventDefault();
+      const rawProvider = document.getElementById('f-provider').value.trim();
+      const rawUrl = document.getElementById('f-url').value.trim();
+      const email = document.getElementById('f-email').value.trim();
+      const cookie = document.getElementById('f-cookie').value.trim();
+      const bearer = document.getElementById('f-bearer').value.trim();
+
+      try {
+        const res = await fetch('/api/admin/channels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            providerId: rawProvider,
+            startUrl: rawUrl || undefined,
+            email: email || undefined,
+            cookie,
+            bearer: bearer || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '保存失败');
+        showToast('已成功保存渠道凭证: ' + data.providerId);
+        document.getElementById('f-cookie').value = '';
+        await loadOverview();
+      } catch (err) {
+        showToast('错误: ' + err.message);
+      }
+      return false;
+    }
+
+    async function removeAccount(providerId, accountId) {
+      try {
+        const res = await fetch('/api/admin/channels', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ providerId, accountId }),
+        });
+        if (!res.ok) throw new Error('删除失败');
+        showToast('已移除账号: ' + accountId);
+        await loadOverview();
+      } catch (err) {
+        showToast('错误: ' + err.message);
+      }
+    }
+
+    function clearChat() {
+      document.getElementById('chat-box').innerHTML = '';
+    }
+
+    async function sendTestChat(e) {
+      e.preventDefault();
+      const model = document.getElementById('chat-model').value.trim();
+      const inputEl = document.getElementById('chat-input');
+      const msg = inputEl.value.trim();
+      if (!model) {
+        showToast('请先选择或输入一个模型名称');
+        return false;
+      }
+      if (!msg) return false;
+
+      const box = document.getElementById('chat-box');
+      if (box.textContent.startsWith('在这里输入一句话')) box.innerHTML = '';
+
+      const uDiv = document.createElement('div');
+      uDiv.className = 'msg-user';
+      uDiv.textContent = '你：' + msg;
+      box.appendChild(uDiv);
+
+      const aDiv = document.createElement('div');
+      aDiv.className = 'msg-ai';
+      aDiv.textContent = 'AI (' + model + ')：正在思考...';
+      box.appendChild(aDiv);
+      box.scrollTop = box.scrollHeight;
+
+      inputEl.value = '';
+      const btn = document.getElementById('chat-send-btn');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            stream: true,
+            messages: [{ role: 'user', content: msg }],
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error?.message || ('HTTP ' + res.status));
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let reply = '';
+        aDiv.textContent = 'AI (' + model + ')：';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:') || trimmed === 'data: [DONE]') continue;
+            try {
+              const chunk = JSON.parse(trimmed.slice(5).trim());
+              const delta = chunk.choices?.[0]?.delta?.content;
+              if (delta) {
+                reply += delta;
+                aDiv.textContent = 'AI (' + model + ')：' + reply;
+                box.scrollTop = box.scrollHeight;
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        aDiv.textContent = '❌ 请求失败: ' + err.message;
+        aDiv.style.color = 'var(--danger)';
+      } finally {
+        btn.disabled = false;
+      }
+      return false;
+    }
+
+    loadOverview();
+    loadCredentialsCenter();
+  </script>
+</body>
+</html>

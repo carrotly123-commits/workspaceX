@@ -30,6 +30,7 @@ import {
 import { exportToTokenFreeGateway } from "./export/tfg.ts";
 import { saveGenericPlatformConfig, type GenericPlatformConfig } from "./platforms/generic.ts";
 import { loadAllAdapters } from "./platforms/registry.ts";
+import { startRegistrarServer } from "./server.ts";
 
 function printHelp(): void {
   console.log(`
@@ -41,6 +42,7 @@ Usage:
 
 Commands:
   platforms                         List supported platforms
+  serve [--port 3200]               Start HTTP API & Web Console server (default http://127.0.0.1:3200)
   discover <url|file>... [opts]     Discover external AI sites & signup entrypoints
   probe    <platform|url>           Probe all registration pathways, CAPTCHAs & selectors
   plan     <platform|url> [opts]    Select optimal registration strategy (API vs Browser)
@@ -559,6 +561,14 @@ async function main(): Promise<void> {
     case "list-platforms":
       await cmdPlatforms(engine);
       break;
+    case "serve":
+    case "server": {
+      const port = flags.port ? Number(flags.port) : Number(process.env.UR_PORT || 3200);
+      const host = flags.host ? String(flags.host) : process.env.UR_HOST || "127.0.0.1";
+      const srv = await startRegistrarServer({ config: engine.config, port, host });
+      log(`Universal Registrar HTTP API & Console listening on http://${srv.host}:${srv.port}`, "success");
+      break;
+    }
     case "discover":
       await cmdDiscover(engine, positional, flags);
       break;

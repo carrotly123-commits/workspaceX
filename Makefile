@@ -11,7 +11,7 @@ COUNT ?= 1
 CONCURRENCY ?= 1
 EMAIL_PROVIDER ?= $(or $(UR_EMAIL_PROVIDER),auto)
 
-.PHONY: help install-ai chrome mail-hub gateway doctor platforms discover probe plan register pipeline capture list credentials export
+.PHONY: help install-ai chrome mail-hub gateway registrar-server doctor platforms discover probe plan register pipeline capture list credentials export
 
 help:
 	@echo ""
@@ -20,6 +20,7 @@ help:
 	@echo "  make chrome                               启动带远程调试端口(9222)的 Chrome"
 	@echo "  make mail-hub                             启动临时邮箱聚合服务 Mail Hub (默认 :3100)"
 	@echo "  make gateway                              启动免 Token API 网关 Token-Free Gateway (默认 :3456)"
+	@echo "  make registrar-server                     启动注册机独立 HTTP API 服务 (默认 :3200)"
 	@echo "  make doctor                               一键体检 Chrome CDP / Mail Hub / Gateway 连通性"
 	@echo "  make platforms                            列出支持自动注册/采集的 13+ AI 平台"
 	@echo "  make discover TARGET=<url|file>           发现外部 AI 网站并识别框架与注册入口"
@@ -46,6 +47,9 @@ mail-hub:
 
 gateway:
 	cd token-free-gateway && bun index.ts serve
+
+registrar-server:
+	cd universal-registrar && npx tsx src/index.ts serve
 
 doctor:
 	cd universal-registrar && npx tsx src/index.ts doctor

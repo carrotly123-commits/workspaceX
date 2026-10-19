@@ -25,7 +25,7 @@ setRouteTimeoutSec(config.requestTimeoutSec);
 
 const CORS_HEADERS: Record<string, string> = {
 	"Access-Control-Allow-Origin": "*",
-	"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+	"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 	"Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
@@ -65,6 +65,10 @@ async function handleRequest(req: Request): Promise<Response> {
 		return withCors(await handleAdminChannelsRoute(req));
 	}
 
+	if (pathname === "/api/registrar" || pathname.startsWith("/api/registrar/")) {
+		return withCors(await handleRegistrarRoute(req));
+	}
+
 	if (pathname === "/v1/chat/completions" && req.method === "POST") {
 		return withCors(await handleChatCompletionsRoute(req));
 	}
@@ -92,6 +96,46 @@ async function handleRequest(req: Request): Promise<Response> {
 }
 
 // ── Route handlers ───────────────────────────────────────────
+
+let cachedRegistrarHandler: ((req: Request) => Promise<Response>) | null = null;
+
+async function handleRegistrarRoute(req: Request): Promise<Response> {
+	// Optional proxy mode if an external UR_SERVER_URL is explicitly configured
+	const remoteBase = process.env.UR_SERVER_URL?.trim().replace(/\/$/, "");
+	if (remoteBase) {
+		try {
+			const u = new URL(req.url);
+			const targetUrl = `${remoteBase}${u.pathname}${u.search}`;
+			const res = await fetch(targetUrl, {
+				method: req.method,
+				headers: req.headers,
+				body: req.method !== "GET" && req.method !== "HEAD" ? await req.text() : undefined,
+			});
+			return res;
+		} catch {
+			// Fallback to embedded handler if remote server is not running
+		}
+	}
+
+	if (!cachedRegistrarHandler) {
+		const modPath = join(import.meta.dir, "..", "..", "universal-registrar", "src", "server.ts");
+		const mod = (await import(modPath)) as {
+			createRegistrarApiHandler: (opts: {
+				onCredentialsUpdated?: () => void;
+			}) => { handleRequest: (r: Request) => Promise<Response> };
+		};
+		const instance = mod.createRegistrarApiHandler({
+			onCredentialsUpdated: () => {
+				for (const id of listAuthorizedProviders()) {
+					evictProviderClient(id);
+				}
+			},
+		});
+		cachedRegistrarHandler = instance.handleRequest;
+	}
+
+	return cachedRegistrarHandler(req);
+}
 
 function handleUiRoute(): Response {
 	const candidates = [

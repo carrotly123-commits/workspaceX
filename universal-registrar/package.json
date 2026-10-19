@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
+    "serve": "tsx src/index.ts serve",
     "discover": "tsx src/index.ts discover",
     "probe": "tsx src/index.ts probe",
     "plan": "tsx src/index.ts plan",
