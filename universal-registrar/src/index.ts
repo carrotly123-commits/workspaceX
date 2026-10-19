@@ -19,8 +19,11 @@ import type { EngineConfig, RegisterMode } from "./core/types.ts";
 import { DEFAULT_ENGINE_CONFIG } from "./core/types.ts";
 import { log } from "./core/utils.ts";
 import { exportToTokenFreeGateway } from "./export/tfg.ts";
-import { saveGenericPlatformConfig, type GenericPlatformConfig } from "./platforms/generic.ts";
+import { GenericAdapter, saveGenericPlatformConfig, type GenericPlatformConfig } from "./platforms/generic.ts";
 import { loadAllAdapters } from "./platforms/registry.ts";
+import { connectCdp } from "./core/browser.ts";
+import { targetOrigins, verifySession } from "./core/session-verification.ts";
+import { inspectSite } from "./core/site-inspection.ts";
 
 function printHelp(): void {
   console.log(`
@@ -32,13 +35,18 @@ Usage:
 
 Commands:
   platforms                         List supported platforms
-  register <platform|url> [opts]    Register account(s) on a built-in or any new URL/channel
-  capture  <platform|url>           Capture session from already-logged-in browser for any channel
+  register <platform|url> [opts]    Register account(s) with a built-in or configured generic adapter
+  capture  <platform|url>           Capture an existing session; generic channels require login evidence
   list [--platform <id>]            Show saved accounts
   export [--platform <id>]          Push credentials into token-free-gateway store
   doctor                            Verify Chrome CDP is reachable
+  inspect <platform|url>            Inspect visible form/GitHub candidates; no signup or export
+  verify <platform|url>             Verify an already-open target tab; no capture or export
 
 Register options:
+  --auth <email|github>             Existing GitHub account authorization (interactive, count=1)
+  --success-cookie <name>           Exact target-site login cookie name (HttpOnly supported)
+  --success-selector <css>          Element visible only after login; all configured checks must pass
   --count <n>                       How many accounts (default 1, max 20)
   --mode <auto|semi|manual>         Override adapter preferred mode
   --url <signupUrl>                 Signup/login URL for onboarding a new channel on the fly
@@ -236,6 +244,54 @@ Add custom platforms as JSON under config/platforms/*.json
 `);
 }
 
+function adapterOptions(flags: Record<string, string | boolean>): Partial<GenericPlatformConfig> | undefined {
+  const names = ["url", "chat-url", "auth", "success-cookie", "success-selector"];
+  for (const name of names) {
+    if (flags[name] !== undefined && (typeof flags[name] !== "string" || !String(flags[name]).trim())) {
+      throw new Error(`--${name} requires a non-empty value`);
+    }
+  }
+  if (flags.auth && !["email", "github"].includes(String(flags.auth))) throw new Error("--auth must be email or github");
+  if (flags.mode && !["auto", "semi", "manual"].includes(String(flags.mode))) throw new Error("--mode must be auto, semi, or manual");
+  if (!names.some(name => flags[name] !== undefined)) return undefined;
+  return {
+    signupUrl: flags.url as string | undefined,
+    chatUrl: flags["chat-url"] as string | undefined,
+    authMethod: flags.auth as "email" | "github" | undefined,
+    successCookie: flags["success-cookie"] as string | undefined,
+    successSelector: flags["success-selector"] as string | undefined,
+  };
+}
+
+async function cmdInspect(engine: RegistrationEngine, platform: string, flags: Record<string, string | boolean>, verifyOnly: boolean): Promise<void> {
+  const adapter = engine.resolveOrCreateAdapter(platform, adapterOptions(flags));
+  if (!adapter) throw new Error("Unknown platform; pass a target URL or --url.");
+  const criteria = adapter instanceof GenericAdapter ? adapter.cfg : { signupUrl: adapter.signupUrl };
+  const origins = targetOrigins(criteria);
+  const session = await connectCdp(engine.config.cdpUrl);
+  try {
+    const pages = session.context.pages().filter(page => {
+      try { return origins.includes(new URL(page.url()).origin); } catch { return false; }
+    });
+    if (pages.length > 1) throw new Error("Multiple target tabs found. Keep one target tab open before inspecting/verifying.");
+    let page = pages[0];
+    if (!page && verifyOnly) throw new Error("No target tab is open. Complete login in the browser first.");
+    if (!page) {
+      page = await session.context.newPage();
+      await page.goto(adapter.signupUrl, { waitUntil: "domcontentloaded", timeout: engine.config.timeoutMs });
+    }
+    if (verifyOnly) {
+      const result = await verifySession(page, criteria);
+      console.log(JSON.stringify(result, null, 2));
+      if (!result.verified) process.exitCode = 1;
+    } else {
+      console.log(JSON.stringify(await inspectSite(page), null, 2));
+    }
+  } finally {
+    await session.close();
+  }
+}
+
 async function cmdRegister(
   engine: RegistrationEngine,
   platform: string,
@@ -245,13 +301,11 @@ async function cmdRegister(
   const count = Math.max(1, Math.min(20, Number(flags.count || 1)));
   const mode = flags.mode ? (String(flags.mode) as RegisterMode) : undefined;
   const exportTfg = !flags.noExport;
-  const adHocConfig: Partial<GenericPlatformConfig> | undefined =
-    flags.url || flags["chat-url"]
-      ? {
-          signupUrl: flags.url ? String(flags.url) : undefined,
-          chatUrl: flags["chat-url"] ? String(flags["chat-url"]) : undefined,
-        }
-      : undefined;
+  const adHocConfig = adapterOptions(flags);
+  if (flags.auth === "github" && (count !== 1 || mode === "auto")) {
+    throw new Error("GitHub authorization requires count=1 and semi/manual mode.");
+  }
+  if (!Number.isInteger(count)) throw new Error("--count must be an integer");
 
   if (flags["save-platform"]) {
     const adapter = engine.resolveOrCreateAdapter(platform, adHocConfig);
@@ -259,11 +313,12 @@ async function cmdRegister(
       const dir = process.env.UR_PLATFORMS_DIR || join(process.cwd(), "config", "platforms");
       const savedPath = saveGenericPlatformConfig(
         {
+          ...(adapter instanceof GenericAdapter ? adapter.cfg : {}),
           id: adapter.id,
           name: adapter.name,
           signupUrl: adapter.signupUrl,
           domains: adapter.domains,
-          chatUrl: flags["chat-url"] ? String(flags["chat-url"]) : undefined,
+          chatUrl: adHocConfig?.chatUrl || (adapter instanceof GenericAdapter ? adapter.cfg.chatUrl : undefined),
           preferredMode: adapter.preferredMode,
           needsEmail: adapter.needsEmail,
           needsPhone: adapter.needsPhone,
@@ -289,6 +344,7 @@ async function cmdRegister(
       exportTfg,
       adHocConfig,
     });
+    if (acc.status !== "success") process.exitCode = 1;
     console.log("\nResult:", JSON.stringify({
       platform: acc.platformId,
       email: acc.email,
@@ -301,10 +357,10 @@ async function cmdRegister(
 
   if (count === 1) {
     const acc = await engine.runOne(platform, { identity, mode, exportTfg, adHocConfig });
+    if (acc.status !== "success") process.exitCode = 1;
     console.log("\nResult:", JSON.stringify({
       platform: acc.platformId,
       email: acc.email,
-      password: acc.password,
       status: acc.status,
       message: acc.message,
       hasCredentials: !!acc.credentials,
@@ -320,6 +376,7 @@ async function cmdRegister(
       ),
     });
     const ok = results.filter((r) => r.status === "success").length;
+    if (ok !== results.length) process.exitCode = 1;
     console.log(`\nBatch done: ${ok}/${results.length} succeeded`);
     for (const r of results) {
       console.log(`  [${r.status}] ${r.email}  ${r.message ?? ""}`);
@@ -389,6 +446,12 @@ async function main(): Promise<void> {
   const engine = buildEngine(flags);
 
   switch (command) {
+    case "inspect":
+    case "verify": {
+      if (!positional[0]) throw new Error(`${command} requires a target platform or URL`);
+      await cmdInspect(engine, positional[0], flags, command === "verify");
+      break;
+    }
     case "platforms":
     case "list-platforms":
       await cmdPlatforms(engine);
