@@ -6,7 +6,7 @@
 > **这个工具就是帮你：**
 > 1. 自动用临时邮箱帮你注册这些 AI 网站的账号（或者直接把你已经在浏览器里登录好的账号“抓”过来）；
 > 2. 把这些免费网页对话**变成你电脑上的标准 OpenAI 接口（`http://127.0.0.1:3456/v1`）**；
-> 3. 支持**任意新网站填进去就能用**，还支持**同一个网站塞好几个账号轮流用**（一个号限流了自动换下一个号）！
+> 通用网站需要按站点检查并配置登录成功证据；网址本身不保证注册、登录或网关调用可用。
 
 ---
 
@@ -66,7 +66,7 @@ make doctor
    - **想加内置平台（如 DeepSeek / Claude / Kimi）？**
      在左栏第 1 个框选择平台（比如 `deepseek-web`），把浏览器里的 Cookie 粘贴进去，点 **“💾 保存并立即挂载渠道/账号”**。
    - **想加一个你自己新发现的野路子 AI 网站？**
-     直接在左栏第 1 个框粘贴那个网站的网址（比如 `https://chat.my-new-ai.com`），再粘贴 Cookie，点保存！系统会自动识别网址并把它变成一个可用模型！
+     在网关的“添加渠道”抽屉里可以添加自定义站点，但 URL 和 Cookie 不会自动变成可用模型。先用 Registrar 检查页面、配置登录证明并验证，再在 Playground 测试实际对话。
 3. 保存后，中间一栏就会出现这个渠道的模型标签。**点一下模型标签**，在右边输入框打一句“你好”，点 **发送**，马上就能看到流式回复！
 
 ---
@@ -78,9 +78,9 @@ make doctor
    ```bash
    make capture PLATFORM=deepseek
    ```
-2. **抓任意新发现的 AI 网站（直接把网址当成 PLATFORM 传进去！）**：
+2. **尝试检查一个自定义 AI 网站**：网址只是检查目标；需要先确认页面结构并配置登录成功证据。
    ```bash
-   make capture PLATFORM=https://chat.example.com
+   cd universal-registrar && npx tsx src/index.ts inspect https://chat.example.com/login
    ```
 3. 运行后，刚才打开的 Chrome 会自动弹出对应网站。**你在浏览器里正常登录账号**，登录成功后回到终端**按一下回车键（Enter）**，它的 Cookie 和登录 Token 就会被自动抓取并存进网关！
 
@@ -105,7 +105,7 @@ make doctor
    make register PLATFORM=deepseek COUNT=3
 
    # 发现了一个新网站？直接把注册页网址填进去就能自动填表注册！
-   make register PLATFORM=https://chat.some-new-ai.com/signup
+   # 先配置 successCookie 或 successSelector，再对已登录标签页执行 verify
    ```
    > 💡 **多账号轮询池是怎么工作的？**
    > 只要你给同一个渠道导入或注册了多个不同邮箱的账号，网关在收到聊天请求时会自动 **第 1 次用账号 A、第 2 次用账号 B、第 3 次用账号 C**。如果账号 A 突然提示限流（429）或登录过期（401），网关会自动让账号 A 休息，瞬间切换到账号 B 继续回答你，完全不中断！
@@ -135,8 +135,12 @@ make doctor
 - **解决**：如果某个网站强制要求滑块或手机短信，你直接在弹出的 Chrome 窗口里手动拉一下滑块或填完验证码，工具会自动检测到你已登录成功并自动完成后续抓取！
 
 ### Q3：我接入了一个全新的小众 AI 网站，但是发消息时提示找不到输入框怎么办？
-- **解决**：90% 的 AI 网站都会被我们的启发式探测器自动识别。如果遇到极个别结构奇特的网站，你可以在 `~/.token-free-gateway/providers/你的网站名.json` 里简单指定一下它的输入框和回复框 CSS 选择器（详见主 `README.md` 第四章方式 C）。
+- **解决**：没有通用成功率保证。用 `inspect <platform|url>` 查看候选项和歧义，再为站点配置登录证明；`verify` 不通过或未配置证明时，结果为未验证且不会导出。优先使用非分析类登录 Cookie，或仅登录后出现的元素（不要选通用 `body`）。页面 Cookie 也不证明网关或模型可用。
 
 ### Q4：隔了好几天再用，提示 `Session expired (401)` 怎么办？
 - **原因**：网页本身的登录 Cookie 过期了。
 - **解决**：重新运行一次 `make capture PLATFORM=对应平台`，或者打开 `http://127.0.0.1:3456/` 粘贴新的 Cookie 点保存即可立即恢复。
+
+### GitHub OAuth 与现有会话
+
+若目标网站提供 GitHub 登录，可对现有目标网站账号运行单账号半自动流程：`npx tsx src/index.ts register https://chat.example.com/signup --auth github --email existing-label --success-cookie actual_cookie --save-platform --mode semi --count 1`。你必须在浏览器中手动登录已有 GitHub 用户并同意授权；这不会创建 GitHub 账号，也不保证目标网站或网关已集成。`capture` 只读取已有登录会话，不会创建邮箱。
