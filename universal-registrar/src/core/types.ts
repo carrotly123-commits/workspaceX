@@ -12,6 +12,7 @@ export type RegisterStatus =
   | "awaiting_sms"
   | "awaiting_captcha"
   | "success"
+  | "unverified"
   | "failed"
   | "skipped";
 
