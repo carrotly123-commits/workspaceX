@@ -3,6 +3,7 @@ import {
 	extractSingleToolCall,
 	extractToolCalls,
 	hasToolCall,
+	StreamingToolCallFilter,
 } from "../src/tool-calling/parser.ts";
 
 describe("extractSingleToolCall", () => {
@@ -99,5 +100,53 @@ describe("hasToolCall", () => {
 
 	test("returns false for plain text", () => {
 		expect(hasToolCall("just some text")).toBe(false);
+	});
+});
+
+describe("StreamingToolCallFilter", () => {
+	test("streams plain text deltas immediately without waiting for completion", () => {
+		const emitted: string[] = [];
+		const filter = new StreamingToolCallFilter((d) => emitted.push(d));
+
+		filter.push("Hello ");
+		expect(emitted.join("")).toBe("Hello ");
+		filter.push("world! ");
+		expect(emitted.join("")).toBe("Hello world! ");
+		filter.push("Everything works.");
+		const state = filter.finish();
+		expect(emitted.join("") + state.unemittedTail).toBe("Hello world! Everything works.");
+		expect(state.capturedToolBlock).toBe(false);
+	});
+
+	test("streams leading text then holds back fenced tool_json block", () => {
+		const emitted: string[] = [];
+		const filter = new StreamingToolCallFilter((d) => emitted.push(d));
+
+		filter.push("Let me check that for you.\n");
+		expect(emitted.join("")).toBe("Let me check that for you.\n");
+
+		filter.push("```tool_");
+		// Prefix held back
+		expect(emitted.join("")).toBe("Let me check that for you.\n");
+
+		filter.push('json\n{"tool":"exec","parameters":{"command":"ls"}}\n```');
+		const state = filter.finish();
+		expect(emitted.join("")).toBe("Let me check that for you.\n");
+		expect(state.capturedToolBlock).toBe(true);
+	});
+
+	test("flushes held backticks when block is a normal code fence", () => {
+		const emitted: string[] = [];
+		const filter = new StreamingToolCallFilter((d) => emitted.push(d));
+
+		filter.push("Here is code:\n```");
+		expect(emitted.join("")).toBe("Here is code:\n");
+
+		filter.push("typescript\nconst x = 1;\n```");
+		const state = filter.finish();
+		expect(emitted.join("") + state.unemittedTail).toBe(
+			"Here is code:\n```typescript\nconst x = 1;\n```",
+		);
+		expect(state.capturedToolBlock).toBe(false);
 	});
 });

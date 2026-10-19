@@ -6,6 +6,7 @@ export interface PageConfig {
 	hostKey: string;
 	startUrl: string;
 	cookies: BrowserCookie[];
+	localStorage?: Record<string, string>;
 }
 
 /**
@@ -26,9 +27,22 @@ export async function ensurePage(currentPage: Page | null, config: PageConfig): 
 	}
 
 	const bm = BrowserManager.getInstance();
-	const page = await bm.getPage(config.hostKey, config.startUrl);
 	if (config.cookies.length > 0) {
 		await bm.addCookies(config.cookies);
+	}
+	const page = await bm.getPage(config.hostKey, config.startUrl);
+	if (config.localStorage && Object.keys(config.localStorage).length > 0) {
+		await page
+			.evaluate((entries) => {
+				for (const [k, v] of Object.entries(entries)) {
+					try {
+						window.localStorage.setItem(k, v);
+					} catch {
+						// ignore quota / security errors
+					}
+				}
+			}, config.localStorage)
+			.catch(() => {});
 	}
 	return page;
 }

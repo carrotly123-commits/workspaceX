@@ -66,18 +66,83 @@ export abstract class BasePlatformAdapter implements PlatformAdapter {
   /** Override in subclasses to map cookies → TFG credential shape. */
   protected async harvestCredentials(
     session: BrowserSession,
-    _page: Page,
+    page: Page,
     ctx: RegisterContext,
   ): Promise<Record<string, unknown> | null> {
     const urls = this.domains.map((d) => (d.startsWith("http") ? d : `https://${d}`));
     const cookies = await collectCookies(session, urls);
-    if (cookies.length === 0) return null;
+    const storage = await extractWebStorageTokens(page);
+    if (cookies.length === 0 && Object.keys(storage.localStorage).length === 0) {
+      return null;
+    }
+    let originUrl = this.signupUrl;
+    let hostDomain = this.domains[0] ?? "";
+    try {
+      const u = new URL(page.url().startsWith("http") ? page.url() : this.signupUrl);
+      originUrl = u.origin;
+      if (!hostDomain) hostDomain = u.hostname;
+    } catch {
+      // ignore URL parse error
+    }
     return {
       cookie: cookiesToString(cookies),
       userAgent: session.userAgent,
       capturedAt: nowIso(),
       email: ctx.identity.email,
+      startUrl: originUrl,
+      cookieDomain: hostDomain.startsWith(".") ? hostDomain : `.${hostDomain.replace(/^\./, "")}`,
+      domains: this.domains,
+      providerName: this.name,
+      ...(storage.bearerToken ? { bearer: storage.bearerToken } : {}),
+      ...(Object.keys(storage.localStorage).length > 0
+        ? { localStorage: storage.localStorage }
+        : {}),
     };
+  }
+}
+
+/** Extract auth-relevant keys and bearer tokens from localStorage / sessionStorage. */
+export async function extractWebStorageTokens(page: Page): Promise<{
+  localStorage: Record<string, string>;
+  bearerToken?: string;
+}> {
+  try {
+    return await page.evaluate(() => {
+      const picked: Record<string, string> = {};
+      let bearerToken: string | undefined;
+      const tokenKeyRe = /token|auth|jwt|session|key|user|credential|access/i;
+      for (const store of [window.localStorage, window.sessionStorage]) {
+        if (!store) continue;
+        for (let i = 0; i < store.length; i++) {
+          const k = store.key(i);
+          if (!k) continue;
+          const v = store.getItem(k);
+          if (!v || v.length > 8192) continue;
+          if (tokenKeyRe.test(k)) {
+            picked[k] = v;
+            if (!bearerToken && /token|jwt|access/i.test(k)) {
+              try {
+                const parsed = JSON.parse(v);
+                const candidate =
+                  typeof parsed === "string"
+                    ? parsed
+                    : (parsed?.value ?? parsed?.token ?? parsed?.access_token ?? parsed?.accessToken);
+                if (typeof candidate === "string" && candidate.length > 10) {
+                  bearerToken = candidate;
+                }
+              } catch {
+                if (v.length > 10 && !v.startsWith("{")) {
+                  bearerToken = v;
+                }
+              }
+            }
+          }
+        }
+      }
+      return { localStorage: picked, bearerToken };
+    });
+  } catch {
+    return { localStorage: {} };
   }
 }
 
@@ -228,21 +293,43 @@ export async function fillEmailPasswordForm(
   const emailOk = await fillFirst(page, [
     'input[type="email"]',
     'input[name="email"]',
+    'input[name="username"]',
     'input[autocomplete="email"]',
+    'input[autocomplete="username"]',
     'input[placeholder*="mail" i]',
     'input[placeholder*="邮箱"]',
-    'input[placeholder*="邮箱"]',
+    'input[placeholder*="账号"]',
   ], identity.email);
   if (!emailOk) throw new Error("Could not find email input");
 
-  const passOk = await fillFirst(page, [
+  const passSelectors = [
     'input[type="password"]',
     'input[name="password"]',
     'input[autocomplete="new-password"]',
+    'input[autocomplete="current-password"]',
     'input[placeholder*="密码"]',
     'input[placeholder*="password" i]',
-  ], identity.password);
-  if (!passOk) throw new Error("Could not find password input");
+  ];
+
+  let passOk = await fillFirst(page, passSelectors, identity.password);
+  if (!passOk) {
+    // Multi-step wizard support: step 1 submits email, step 2 reveals password or OTP
+    await clickSignupSubmit(page).catch(() => {});
+    await sleep(1500);
+    await handleCaptchaIfPresent(page, () => {}, { timeoutMs: 30_000 }).catch(() => {});
+    passOk = await fillFirst(page, passSelectors, identity.password);
+    if (!passOk) {
+      const otpVisible = await page
+        .locator('input[name="code"], input[name="otp"], input[autocomplete="one-time-code"], input[placeholder*="验证码"], input[placeholder*="code" i], input[maxlength="1"]')
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (!otpVisible) {
+        throw new Error("Could not find password input");
+      }
+      return;
+    }
+  }
 
   // Confirm password if present
   const passFields = page.locator('input[type="password"]');

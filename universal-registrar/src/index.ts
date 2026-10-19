@@ -19,6 +19,7 @@ import type { EngineConfig, RegisterMode } from "./core/types.ts";
 import { DEFAULT_ENGINE_CONFIG } from "./core/types.ts";
 import { log } from "./core/utils.ts";
 import { exportToTokenFreeGateway } from "./export/tfg.ts";
+import { saveGenericPlatformConfig, type GenericPlatformConfig } from "./platforms/generic.ts";
 import { loadAllAdapters } from "./platforms/registry.ts";
 
 function printHelp(): void {
@@ -31,8 +32,8 @@ Usage:
 
 Commands:
   platforms                         List supported platforms
-  register <platform> [opts]        Register account(s) on a platform
-  capture  <platform>               Capture session from already-logged-in browser
+  register <platform|url> [opts]    Register account(s) on a built-in or any new URL/channel
+  capture  <platform|url>           Capture session from already-logged-in browser for any channel
   list [--platform <id>]            Show saved accounts
   export [--platform <id>]          Push credentials into token-free-gateway store
   doctor                            Verify Chrome CDP is reachable
@@ -40,6 +41,9 @@ Commands:
 Register options:
   --count <n>                       How many accounts (default 1, max 20)
   --mode <auto|semi|manual>         Override adapter preferred mode
+  --url <signupUrl>                 Signup/login URL for onboarding a new channel on the fly
+  --chat-url <chatUrl>              Chat page URL for token-free-gateway (defaults to URL origin)
+  --save-platform                   Save this new channel into config/platforms/<id>.json
   --email <addr>                    Use this email (skip pool/manual acquire)
   --password <pwd>                  Use this password
   --phone <num>                     Phone number for SMS platforms
@@ -241,6 +245,34 @@ async function cmdRegister(
   const count = Math.max(1, Math.min(20, Number(flags.count || 1)));
   const mode = flags.mode ? (String(flags.mode) as RegisterMode) : undefined;
   const exportTfg = !flags.noExport;
+  const adHocConfig: Partial<GenericPlatformConfig> | undefined =
+    flags.url || flags["chat-url"]
+      ? {
+          signupUrl: flags.url ? String(flags.url) : undefined,
+          chatUrl: flags["chat-url"] ? String(flags["chat-url"]) : undefined,
+        }
+      : undefined;
+
+  if (flags["save-platform"]) {
+    const adapter = engine.resolveOrCreateAdapter(platform, adHocConfig);
+    if (adapter) {
+      const dir = process.env.UR_PLATFORMS_DIR || join(process.cwd(), "config", "platforms");
+      const savedPath = saveGenericPlatformConfig(
+        {
+          id: adapter.id,
+          name: adapter.name,
+          signupUrl: adapter.signupUrl,
+          domains: adapter.domains,
+          chatUrl: flags["chat-url"] ? String(flags["chat-url"]) : undefined,
+          preferredMode: adapter.preferredMode,
+          needsEmail: adapter.needsEmail,
+          needsPhone: adapter.needsPhone,
+        },
+        dir,
+      );
+      log(`Saved custom platform definition to ${savedPath}`, "success");
+    }
+  }
 
   const identity = {
     email: flags.email ? String(flags.email) : undefined,
@@ -255,6 +287,7 @@ async function cmdRegister(
       mode: mode ?? "manual",
       captureOnly: true,
       exportTfg,
+      adHocConfig,
     });
     console.log("\nResult:", JSON.stringify({
       platform: acc.platformId,
@@ -267,7 +300,7 @@ async function cmdRegister(
   }
 
   if (count === 1) {
-    const acc = await engine.runOne(platform, { identity, mode, exportTfg });
+    const acc = await engine.runOne(platform, { identity, mode, exportTfg, adHocConfig });
     console.log("\nResult:", JSON.stringify({
       platform: acc.platformId,
       email: acc.email,
@@ -277,7 +310,9 @@ async function cmdRegister(
       hasCredentials: !!acc.credentials,
     }, null, 2));
   } else {
-    const results = await engine.runBatch(platform, count, {
+    const resolved = engine.resolveOrCreateAdapter(platform, adHocConfig);
+    const targetPlatformId = resolved?.id ?? platform;
+    const results = await engine.runBatch(targetPlatformId, count, {
       mode,
       exportTfg,
       identities: Array.from({ length: count }, (_, i) =>
@@ -326,20 +361,15 @@ async function cmdExport(
     return;
   }
 
-  // For each platform keep the latest
-  const latest = new Map<string, (typeof rows)[0]>();
-  for (const r of rows) {
-    const prev = latest.get(r.platformId);
-    if (!prev || prev.updatedAt < r.updatedAt) latest.set(r.platformId, r);
-  }
-
+  // Sort chronologically so all valid accounts are merged into the multi-account pool
+  const sorted = [...rows].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
   let n = 0;
-  for (const r of latest.values()) {
+  for (const r of sorted) {
     exportToTokenFreeGateway(r.platformId, r.credentials, engine.config.tfgStorePath);
     log(`Exported ${r.platformId} (${r.email})`, "success");
     n++;
   }
-  log(`Done. ${n} provider(s) written to ${engine.config.tfgStorePath}`, "success");
+  log(`Done. ${n} account(s) written to ${engine.config.tfgStorePath}`, "success");
   log("Start gateway: token-free-gateway start");
 }
 

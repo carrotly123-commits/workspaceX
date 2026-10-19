@@ -105,3 +105,109 @@ export function hasToolCall(text: string): boolean {
 		OPENAI_TOOL_CALLS_REGEX.test(text)
 	);
 }
+
+const CONFIRMED_TOOL_START_RE = /```tool_json|<tool_call[\s>]|^\s*\{\s*"(?:tool|tool_calls)"\s*:/;
+
+const POTENTIAL_PREFIXES = [
+	"```tool_json",
+	"<tool_call",
+	'{"tool"',
+	'{"tool_calls"',
+	'{ "tool"',
+	'{ "tool_calls"',
+];
+
+/**
+ * Incremental streaming filter for tool calls.
+ *
+ * Immediately forwards normal assistant text deltas via `onContentDelta` for low TTFT,
+ * while holding back potential tool-call prefixes (`<tool_call`, ```` ```tool_json ````,
+ * `{"tool":`) and buffering confirmed tool-call blocks so they can be parsed into
+ * structured `tool_calls` at stream end.
+ */
+export class StreamingToolCallFilter {
+	private fullText = "";
+	private pending = "";
+	private emittedContent = "";
+	private capturingTool = false;
+
+	constructor(private readonly onContentDelta: (delta: string) => void) {}
+
+	push(delta: string): void {
+		if (!delta) return;
+		this.fullText += delta;
+		if (this.capturingTool) {
+			return;
+		}
+		this.pending += delta;
+		this.drainPending();
+	}
+
+	private drainPending(): void {
+		const fenceIdx = this.pending.indexOf("```tool_json");
+		const xmlIdx = this.pending.indexOf("<tool_call");
+		const jsonMatch =
+			this.emittedContent.trim().length === 0
+				? /^\s*\{\s*"(?:tool|tool_calls)"\s*:/.exec(this.pending)
+				: null;
+
+		let earliestToolIdx = -1;
+		for (const idx of [fenceIdx, xmlIdx, jsonMatch ? jsonMatch.index : -1]) {
+			if (idx >= 0 && (earliestToolIdx === -1 || idx < earliestToolIdx)) {
+				earliestToolIdx = idx;
+			}
+		}
+
+		if (earliestToolIdx >= 0) {
+			const before = this.pending.slice(0, earliestToolIdx);
+			if (before) {
+				this.emittedContent += before;
+				this.onContentDelta(before);
+			}
+			this.pending = this.pending.slice(earliestToolIdx);
+			this.capturingTool = true;
+			return;
+		}
+
+		const holdLen = this.computeHoldLength(this.pending);
+		const safeLen = this.pending.length - holdLen;
+		if (safeLen > 0) {
+			const toEmit = this.pending.slice(0, safeLen);
+			this.pending = this.pending.slice(safeLen);
+			this.emittedContent += toEmit;
+			this.onContentDelta(toEmit);
+		}
+	}
+
+	private computeHoldLength(buf: string): number {
+		if (this.emittedContent.trim().length === 0 && /^\s*\{\s*(?:"[a-z_]*)?$/i.test(buf)) {
+			return buf.length;
+		}
+		let maxHold = 0;
+		const tailMax = Math.min(buf.length, 16);
+		for (let len = 1; len <= tailMax; len++) {
+			const suffix = buf.slice(buf.length - len);
+			for (const prefix of POTENTIAL_PREFIXES) {
+				if (prefix.startsWith(suffix)) {
+					if (len > maxHold) maxHold = len;
+				}
+			}
+		}
+		return maxHold;
+	}
+
+	finish(): {
+		fullText: string;
+		emittedContent: string;
+		unemittedTail: string;
+		capturedToolBlock: boolean;
+	} {
+		const capturedToolBlock = this.capturingTool || CONFIRMED_TOOL_START_RE.test(this.pending);
+		return {
+			fullText: this.fullText,
+			emittedContent: this.emittedContent,
+			unemittedTail: this.pending,
+			capturedToolBlock,
+		};
+	}
+}

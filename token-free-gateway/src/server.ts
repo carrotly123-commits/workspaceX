@@ -1,12 +1,22 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { authenticate } from "./auth.ts";
 import { BrowserManager } from "./browser/manager.ts";
 import { loadConfig } from "./config.ts";
 import { handleChatCompletions, setRouteTimeoutSec } from "./openai/chat-completions.ts";
-import { listAuthorizedProviders } from "./providers/auth-store.ts";
+import {
+	getAccountPool,
+	listAuthorizedProviders,
+	loadAuthStore,
+	saveAuthStore,
+	saveCredentials,
+} from "./providers/auth-store.ts";
 import {
 	checkAllSessions,
+	evictProviderClient,
 	getClientForModel,
 	listAllModels,
+	listProviderDefinitions,
 	resolveModelToProvider,
 } from "./providers/registry.ts";
 
@@ -43,8 +53,17 @@ async function handleRequest(req: Request): Promise<Response> {
 		return withCors(await handleHealthRoute());
 	}
 
+	// Built-in Web Console UI
+	if ((pathname === "/" || pathname === "/ui") && req.method === "GET") {
+		return handleUiRoute();
+	}
+
 	const authError = authenticate(req, config.gatewayApiKey);
 	if (authError) return withCors(authError);
+
+	if (pathname === "/api/admin/channels") {
+		return withCors(await handleAdminChannelsRoute(req));
+	}
 
 	if (pathname === "/v1/chat/completions" && req.method === "POST") {
 		return withCors(await handleChatCompletionsRoute(req));
@@ -73,6 +92,127 @@ async function handleRequest(req: Request): Promise<Response> {
 }
 
 // ── Route handlers ───────────────────────────────────────────
+
+function handleUiRoute(): Response {
+	const candidates = [
+		join(import.meta.dir, "public", "index.html"),
+		join(process.cwd(), "src", "public", "index.html"),
+	];
+	for (const p of candidates) {
+		if (existsSync(p)) {
+			return new Response(readFileSync(p, "utf-8"), {
+				headers: { "Content-Type": "text/html; charset=utf-8" },
+			});
+		}
+	}
+	return new Response("<h1>Token-Free Gateway</h1>", {
+		headers: { "Content-Type": "text/html; charset=utf-8" },
+	});
+}
+
+async function handleAdminChannelsRoute(req: Request): Promise<Response> {
+	if (req.method === "GET") {
+		const defs = await listProviderDefinitions();
+		const authorized = listAuthorizedProviders();
+		const channels = authorized.map((id) => {
+			const def =
+				defs.find((d) => d.id === id) ??
+				defs.find((d) => d.id === `${id}-web`) ??
+				defs.find((d) => d.id.replace(/-web$/, "") === id);
+			const accounts = getAccountPool(def?.id ?? id);
+			return {
+				id: def?.id ?? id,
+				name: def?.name ?? id,
+				models: def?.models ?? [{ id, name: id }],
+				accounts: accounts.map((a) => ({
+					id: a.id,
+					email: a.email,
+					updatedAt: a.updatedAt,
+				})),
+			};
+		});
+		return Response.json({ channels });
+	}
+
+	if (req.method === "POST") {
+		let body: Record<string, unknown>;
+		try {
+			body = (await req.json()) as Record<string, unknown>;
+		} catch {
+			return Response.json({ error: { message: "Invalid JSON" } }, { status: 400 });
+		}
+		let rawProvider = String(body.providerId ?? "").trim();
+		let startUrl = typeof body.startUrl === "string" ? body.startUrl.trim() : "";
+		const cookie = typeof body.cookie === "string" ? body.cookie.trim() : "";
+		const email = typeof body.email === "string" ? body.email.trim() : undefined;
+		const bearer = typeof body.bearer === "string" ? body.bearer.trim() : undefined;
+
+		if (!rawProvider || !cookie) {
+			return Response.json(
+				{ error: { message: "providerId and cookie are required" } },
+				{ status: 400 },
+			);
+		}
+
+		if (/^https?:\/\//i.test(rawProvider) || rawProvider.includes(".")) {
+			const u = new URL(
+				/^https?:\/\//i.test(rawProvider) ? rawProvider : `https://${rawProvider}`,
+			);
+			if (!startUrl) startUrl = u.toString();
+			const parts = u.hostname.split(".").filter(Boolean);
+			rawProvider = (parts.length >= 2 ? parts[parts.length - 2]! : parts[0]!)
+				.replace(/[^a-z0-9-_]/gi, "-")
+				.toLowerCase();
+		}
+
+		const credentials: Record<string, unknown> = {
+			cookie,
+			capturedAt: new Date().toISOString(),
+			...(email ? { email } : {}),
+			...(startUrl ? { startUrl } : {}),
+			...(bearer ? { bearer } : {}),
+		};
+		saveCredentials(rawProvider, credentials, {
+			accountId: email || undefined,
+			append: Boolean(email),
+		});
+		evictProviderClient(rawProvider);
+		return Response.json({ ok: true, providerId: rawProvider });
+	}
+
+	if (req.method === "DELETE") {
+		const body = (await req.json().catch(() => ({}))) as {
+			providerId?: string;
+			accountId?: string;
+		};
+		const store = loadAuthStore();
+		const key =
+			Object.keys(store.profiles).find(
+				(k) =>
+					k === body.providerId ||
+					`${k}-web` === body.providerId ||
+					k === body.providerId?.replace(/-web$/, ""),
+			) ?? body.providerId;
+		if (key && store.profiles[key]) {
+			const prof = store.profiles[key]!;
+			if (Array.isArray(prof.accounts) && body.accountId) {
+				prof.accounts = prof.accounts.filter((a) => a.id !== body.accountId);
+				if (prof.accounts.length === 0) {
+					delete store.profiles[key];
+				} else {
+					prof.credentials = prof.accounts[prof.accounts.length - 1]!.credentials;
+				}
+			} else {
+				delete store.profiles[key];
+			}
+			saveAuthStore(store);
+			if (body.providerId) evictProviderClient(body.providerId);
+		}
+		return Response.json({ ok: true });
+	}
+
+	return Response.json({ error: { message: "Method not allowed" } }, { status: 405 });
+}
 
 async function handleHealthRoute(): Promise<Response> {
 	const authorized = listAuthorizedProviders();

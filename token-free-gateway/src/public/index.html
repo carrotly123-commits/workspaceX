@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Token-Free Gateway · 免 Token 渠道与对话控制台</title>
+  <style>
+    :root {
+      --bg: #f4f7f6;
+      --surface: #ffffff;
+      --surface-subtle: #f8faf9;
+      --border: #dce5e1;
+      --text: #16211e;
+      --text-secondary: #52635e;
+      --text-muted: #7b8c87;
+      --primary: #0d7f64;
+      --primary-hover: #096650;
+      --primary-soft: rgba(13, 127, 100, 0.1);
+      --danger: #c83250;
+      --danger-soft: rgba(200, 50, 80, 0.1);
+      --amber: #b4690e;
+      --amber-soft: rgba(180, 105, 14, 0.12);
+      --radius: 12px;
+      --shadow: 0 2px 10px rgba(16, 24, 40, 0.05);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+      max-width: 1360px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0d7f64, #14b8a6);
+      color: #fff;
+      font-weight: 800;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .brand h1 { font-size: 20px; font-weight: 700; }
+    .brand p { font-size: 13px; color: var(--text-secondary); }
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--surface-subtle);
+    }
+    .pill.ok { background: var(--primary-soft); color: var(--primary); border-color: rgba(13, 127, 100, 0.25); }
+    .pill.warn { background: var(--amber-soft); color: var(--amber); border-color: rgba(180, 105, 14, 0.25); }
+    .pill.err { background: var(--danger-soft); color: var(--danger); border-color: rgba(200, 50, 80, 0.25); }
+    .copy-box {
+      font-family: var(--mono);
+      cursor: pointer;
+      user-select: all;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 380px 1fr 420px;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 1180px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+    .form-group { margin-bottom: 12px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      background: var(--surface-subtle);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      border-color: var(--primary);
+      background: #fff;
+    }
+    .form-group small {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-subtle);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: #eaeff0; }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-color: transparent;
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .channel-list { display: flex; flex-direction: column; gap: 12px; }
+    .channel-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      background: var(--surface-subtle);
+    }
+    .channel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .channel-name { font-weight: 700; font-size: 15px; }
+    .model-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .model-tag {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .model-tag:hover { border-color: var(--primary); color: var(--primary); }
+    .acct-list {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .acct-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .chat-box {
+      height: 320px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-subtle);
+      padding: 12px;
+      overflow-y: auto;
+      font-size: 13px;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+    .msg-user {
+      background: var(--primary-soft);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .msg-ai {
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #16211e;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 999;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-badge">TF</div>
+      <div>
+        <h1>Token-Free Gateway 控制台</h1>
+        <p>免 API Key · 任意网页 AI 渠道即填即用 · 多账号池轮询防限流 · 标准 OpenAI 接口</p>
+      </div>
+    </div>
+    <div class="status-strip">
+      <span class="pill" id="st-gateway">网关检测中...</span>
+      <span class="pill" id="st-browser">Chrome CDP 检测中...</span>
+      <span class="pill copy-box" onclick="copyApiBase()" title="点击复制 OpenAI 兼容接口地址">
+        API Base: <strong id="api-base-url">http://127.0.0.1:3456/v1</strong> 📋
+      </span>
+      <button class="btn btn-sm" onclick="loadOverview()">🔄 刷新状态</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- 左栏：快速添加新渠道或新账号 -->
+    <section class="card">
+      <div class="card-title">① 填入新渠道 / 追加账号池</div>
+      <p class="card-desc">
+        无论是内置 13 大平台，还是你自己新发现的任意 AI 网站，填入网址与 Cookie 即可立即作为 OpenAI 模型使用。同一渠道重复提交不同邮箱会自动加入多账号轮询池。
+      </p>
+      <form onsubmit="return saveChannelAccount(event)">
+        <div class="form-group">
+          <label>选择或输入新渠道 ID / 网址 *</label>
+          <input id="f-provider" list="builtin-providers" placeholder="例如 deepseek-web 或 https://chat.example.com" required />
+          <datalist id="builtin-providers">
+            <option value="deepseek-web">DeepSeek (内置)</option>
+            <option value="claude-web">Claude (内置)</option>
+            <option value="chatgpt-web">ChatGPT (内置)</option>
+            <option value="gemini-web">Gemini (内置)</option>
+            <option value="qwen-cn-web">通义千问 CN (内置)</option>
+            <option value="qwen-web">Qwen Intl (内置)</option>
+            <option value="doubao-web">豆包 Doubao (内置)</option>
+            <option value="kimi-web">Kimi (内置)</option>
+            <option value="glm-web">智谱清言 GLM (内置)</option>
+            <option value="grok-web">Grok (内置)</option>
+            <option value="perplexity-web">Perplexity (内置)</option>
+            <option value="xiaomimo-web">小米 MiMo (内置)</option>
+          </datalist>
+          <small>新渠道可直接填名字（如 <code>my-ai</code>）或直接粘网址</small>
+        </div>
+        <div class="form-group">
+          <label>新渠道对话网址（内置渠道可留空）</label>
+          <input id="f-url" placeholder="https://chat.example.com" />
+        </div>
+        <div class="form-group">
+          <label>账号标识 / 邮箱（用于多账号池区分不同账号）</label>
+          <input id="f-email" placeholder="例如 account1@example.com（可留空）" />
+        </div>
+        <div class="form-group">
+          <label>浏览器 Cookie 凭证 *</label>
+          <textarea id="f-cookie" rows="3" placeholder="从浏览器 F12 复制的 Cookie 字符串，如 session=xxx; token=yyy" required></textarea>
+        </div>
+        <div class="form-group">
+          <label>Bearer Token（可选，如 DeepSeek userToken）</label>
+          <input id="f-bearer" placeholder="可选 Bearer Token" />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">💾 保存并立即挂载渠道/账号</button>
+      </form>
+    </section>
+
+    <!-- 中栏：已接入渠道与多账号池 -->
+    <section class="card">
+      <div class="card-title">
+        <span>② 已接入渠道 & 多账号池</span>
+        <span id="channel-summary" style="font-size:12px;color:var(--text-secondary);font-weight:500"></span>
+      </div>
+      <p class="card-desc">点击任意模型标签即可填入右侧测试台；同一渠道有多个账号时将自动轮询并在 429/过期时自动切换。</p>
+      <div id="channel-list" class="channel-list">
+        <div style="color:var(--text-muted);font-size:13px">正在加载渠道数据...</div>
+      </div>
+    </section>
+
+    <!-- 右栏：在线对话测试台 Playground -->
+    <section class="card">
+      <div class="card-title">
+        <span>③ 在线对话测试 (Playground)</span>
+        <button class="btn btn-sm" onclick="clearChat()">清空</button>
+      </div>
+      <p class="card-desc">直接调用本机 <code>POST /v1/chat/completions</code> 接口测试流式响应。</p>
+      <div class="form-group">
+        <label>当前测试模型</label>
+        <input id="chat-model" placeholder="点击左侧模型标签或直接输入模型名" />
+      </div>
+      <div id="chat-box" class="chat-box">在这里输入一句话，立即测试你的免 Token 渠道是否畅通。</div>
+      <form onsubmit="return sendTestChat(event)" style="display:flex;gap:8px">
+        <input id="chat-input" placeholder="输入测试消息，如：你好，请用一句话介绍自己" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px" required />
+        <button type="submit" class="btn btn-primary" id="chat-send-btn">发送</button>
+      </form>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    document.getElementById('api-base-url').textContent = location.origin + '/v1';
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show';
+      setTimeout(() => { el.className = 'toast'; }, 2600);
+    }
+
+    function copyApiBase() {
+      const url = location.origin + '/v1';
+      navigator.clipboard?.writeText(url).catch(() => {});
+      showToast('已复制接口地址: ' + url);
+    }
+
+    function selectModel(modelId) {
+      document.getElementById('chat-model').value = modelId;
+      showToast('已选中测试模型: ' + modelId);
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+
+    async function loadOverview() {
+      try {
+        const [healthRes, adminRes] = await Promise.all([
+          fetch('/health'),
+          fetch('/api/admin/channels'),
+        ]);
+        const health = await healthRes.json();
+        const data = await adminRes.json();
+
+        const gwEl = document.getElementById('st-gateway');
+        gwEl.textContent = '网关状态: 运行中 (' + (data.channels?.length || 0) + ' 渠道 / ' + (health.models || 0) + ' 模型)';
+        gwEl.className = 'pill ok';
+
+        const brEl = document.getElementById('st-browser');
+        if (health.browser === 'connected') {
+          brEl.textContent = 'Chrome CDP: 已连接';
+          brEl.className = 'pill ok';
+        } else {
+          brEl.textContent = 'Chrome CDP: 未连接 (请运行 make chrome)';
+          brEl.className = 'pill warn';
+        }
+
+        renderChannels(data.channels || []);
+      } catch (e) {
+        showToast('加载状态失败: ' + e.message);
+      }
+    }
+
+    function renderChannels(channels) {
+      const listEl = document.getElementById('channel-list');
+      const summaryEl = document.getElementById('channel-summary');
+      const totalAccounts = channels.reduce((s, c) => s + (c.accounts?.length || 0), 0);
+      summaryEl.textContent = `共 ${channels.length} 个已授权渠道 · ${totalAccounts} 个账号在池`;
+
+      if (!channels.length) {
+        listEl.innerHTML = `<div style="padding:18px;border:1px dashed var(--border);border-radius:10px;color:var(--text-secondary);font-size:13px">
+          当前还没有已授权渠道。<br/>👉 你可以在左侧表单直接填入任意渠道 Cookie，或在终端执行 <code>make capture PLATFORM=claude</code>。
+        </div>`;
+        return;
+      }
+
+      const chatModelInput = document.getElementById('chat-model');
+      if (!chatModelInput.value && channels[0]?.models?.[0]?.id) {
+        chatModelInput.value = channels[0].models[0].id;
+      }
+
+      listEl.innerHTML = channels.map(ch => {
+        const modelsHtml = (ch.models || []).map(m =>
+          `<span class="model-tag" onclick="selectModel('${esc(m.id)}')" title="点击用于右侧对话测试">${esc(m.id)}</span>`
+        ).join('');
+        const acctsHtml = (ch.accounts || []).map(a =>
+          `<div class="acct-row">
+            <span>👤 <strong>${esc(a.email || a.id)}</strong> <span style="color:var(--text-muted)">(${esc(a.updatedAt?.slice(0, 19).replace('T', ' ') || '')})</span></span>
+            <button class="btn btn-danger" onclick="removeAccount('${esc(ch.id)}','${esc(a.id)}')">移除</button>
+          </div>`
+        ).join('');
+        return `<div class="channel-item">
+          <div class="channel-head">
+            <div>
+              <span class="channel-name">${esc(ch.name || ch.id)}</span>
+              <span style="font-size:12px;color:var(--text-muted);margin-left:6px">(${esc(ch.id)})</span>
+            </div>
+            <span class="pill ok" style="padding:2px 8px;font-size:11px">${(ch.accounts || []).length} 账号轮询中</span>
+          </div>
+          <div class="model-tags">${modelsHtml}</div>
+          <div class="acct-list">${acctsHtml}</div>
+        </div>`;
+      }).join('');
+    }
+
+    async function saveChannelAccount(e) {
+      e.preventDefault();
+      const rawProvider = document.getElementById('f-provider').value.trim();
+      const rawUrl = document.getElementById('f-url').value.trim();
+      const email = document.getElementById('f-email').value.trim();
+      const cookie = document.getElementById('f-cookie').value.trim();
+      const bearer = document.getElementById('f-bearer').value.trim();
+
+      try {
+        const res = await fetch('/api/admin/channels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            providerId: rawProvider,
+            startUrl: rawUrl || undefined,
+            email: email || undefined,
+            cookie,
+            bearer: bearer || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '保存失败');
+        showToast('已成功保存渠道凭证: ' + data.providerId);
+        document.getElementById('f-cookie').value = '';
+        await loadOverview();
+      } catch (err) {
+        showToast('错误: ' + err.message);
+      }
+      return false;
+    }
+
+    async function removeAccount(providerId, accountId) {
+      try {
+        const res = await fetch('/api/admin/channels', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ providerId, accountId }),
+        });
+        if (!res.ok) throw new Error('删除失败');
+        showToast('已移除账号: ' + accountId);
+        await loadOverview();
+      } catch (err) {
+        showToast('错误: ' + err.message);
+      }
+    }
+
+    function clearChat() {
+      document.getElementById('chat-box').innerHTML = '';
+    }
+
+    async function sendTestChat(e) {
+      e.preventDefault();
+      const model = document.getElementById('chat-model').value.trim();
+      const inputEl = document.getElementById('chat-input');
+      const msg = inputEl.value.trim();
+      if (!model) {
+        showToast('请先选择或输入一个模型名称');
+        return false;
+      }
+      if (!msg) return false;
+
+      const box = document.getElementById('chat-box');
+      if (box.textContent.startsWith('在这里输入一句话')) box.innerHTML = '';
+
+      const uDiv = document.createElement('div');
+      uDiv.className = 'msg-user';
+      uDiv.textContent = '你：' + msg;
+      box.appendChild(uDiv);
+
+      const aDiv = document.createElement('div');
+      aDiv.className = 'msg-ai';
+      aDiv.textContent = 'AI (' + model + ')：正在思考...';
+      box.appendChild(aDiv);
+      box.scrollTop = box.scrollHeight;
+
+      inputEl.value = '';
+      const btn = document.getElementById('chat-send-btn');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            stream: true,
+            messages: [{ role: 'user', content: msg }],
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error?.message || ('HTTP ' + res.status));
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let reply = '';
+        aDiv.textContent = 'AI (' + model + ')：';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:') || trimmed === 'data: [DONE]') continue;
+            try {
+              const chunk = JSON.parse(trimmed.slice(5).trim());
+              const delta = chunk.choices?.[0]?.delta?.content;
+              if (delta) {
+                reply += delta;
+                aDiv.textContent = 'AI (' + model + ')：' + reply;
+                box.scrollTop = box.scrollHeight;
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        aDiv.textContent = '❌ 请求失败: ' + err.message;
+        aDiv.style.color = 'var(--danger)';
+      } finally {
+        btn.disabled = false;
+      }
+      return false;
+    }
+
+    loadOverview();
+  </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import type { Page } from "playwright-core";
+import { BrowserManager } from "../../browser/manager.ts";
 import type { BrowserCookie } from "../shared/cookie-parser.ts";
 import { ensurePage } from "../shared/page-lifecycle.ts";
 import { textToStream } from "../shared/stream-helpers.ts";
@@ -65,20 +66,23 @@ export abstract class BaseDomClient<TAuth = unknown> implements WebProviderClien
 		model?: string;
 		signal?: AbortSignal;
 	}): Promise<ReadableStream<Uint8Array>> {
-		const page = await this.getPage();
-		const normalized: NormalizedSendParams = {
-			message: params.message,
-			model: params.model || this.config.models[0]?.id || "default",
-			signal: params.signal,
-		};
+		const bm = BrowserManager.getInstance();
+		return bm.withPageLock(this.config.hostKey, async () => {
+			const page = await this.getPage();
+			const normalized: NormalizedSendParams = {
+				message: params.message,
+				model: params.model || this.config.models[0]?.id || "default",
+				signal: params.signal,
+			};
 
-		const text = await this.sendViaDom(page, normalized);
-		if (!text) {
-			throw new Error(
-				`${this.providerId}: no assistant reply detected. Ensure the site is reachable and you are logged in.`,
-			);
-		}
-		return textToStream(this.formatSsePayload(text));
+			const text = await this.sendViaDom(page, normalized);
+			if (!text) {
+				throw new Error(
+					`${this.providerId}: no assistant reply detected. Ensure the site is reachable and you are logged in.`,
+				);
+			}
+			return textToStream(this.formatSsePayload(text));
+		});
 	}
 
 	async parseStream(

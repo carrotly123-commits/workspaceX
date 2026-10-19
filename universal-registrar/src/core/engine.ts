@@ -21,6 +21,7 @@ import type {
   RegisteredAccount,
 } from "./types.ts";
 import { DEFAULT_ENGINE_CONFIG } from "./types.ts";
+import { createAdHocAdapter, type GenericPlatformConfig } from "../platforms/generic.ts";
 import { generateName, generatePassword, log, nowIso, sleep } from "./utils.ts";
 
 function createAskHuman(): HumanPromptFn {
@@ -76,7 +77,39 @@ export class RegistrationEngine {
   }
 
   getAdapter(id: string): PlatformAdapter | undefined {
-    return this.adapters.get(id);
+    const direct = this.adapters.get(id);
+    if (direct) return direct;
+    if (id.endsWith("-web")) {
+      const stripped = id.slice(0, -4);
+      if (this.adapters.has(stripped)) return this.adapters.get(stripped);
+    } else if (this.adapters.has(`${id}-web`)) {
+      return this.adapters.get(`${id}-web`);
+    }
+    return undefined;
+  }
+
+  /**
+   * Resolve an existing adapter or dynamically create a zero-config GenericAdapter
+   * when given a URL, domain, or custom channel with an explicit `signupUrl`.
+   */
+  resolveOrCreateAdapter(
+    platformIdOrUrl: string,
+    adHocOverrides?: Partial<GenericPlatformConfig>,
+  ): PlatformAdapter | undefined {
+    const existing = this.getAdapter(platformIdOrUrl);
+    if (existing && !adHocOverrides?.signupUrl) return existing;
+
+    const looksLikeUrlOrDomain =
+      /^https?:\/\//i.test(platformIdOrUrl) ||
+      platformIdOrUrl.includes(".") ||
+      platformIdOrUrl.includes("/") ||
+      Boolean(adHocOverrides?.signupUrl);
+
+    if (!looksLikeUrlOrDomain) return existing;
+
+    const adapter = createAdHocAdapter(platformIdOrUrl, adHocOverrides);
+    this.registerAdapter(adapter);
+    return adapter;
   }
 
   private buildEmailProvider(): EmailProvider {
@@ -122,12 +155,13 @@ export class RegistrationEngine {
       mode?: RegisterMode;
       captureOnly?: boolean;
       exportTfg?: boolean;
+      adHocConfig?: Partial<GenericPlatformConfig>;
     } = {},
   ): Promise<RegisteredAccount> {
-    const adapter = this.adapters.get(platformId);
+    const adapter = this.resolveOrCreateAdapter(platformId, options.adHocConfig);
     if (!adapter) {
       throw new Error(
-        `Unknown platform "${platformId}". Available: ${[...this.adapters.keys()].join(", ")}`,
+        `Unknown platform "${platformId}". Pass a URL/domain (e.g. https://example.com/signup) or --url <signupUrl> to use any new channel immediately, or choose from: ${[...this.adapters.keys()].join(", ")}`,
       );
     }
 

@@ -165,4 +165,72 @@ describe("chat completions response format", () => {
 		expect(json.choices[0]?.message.content).toContain("file1.txt");
 		expect(json.choices[0]?.message.tool_calls).toBeUndefined();
 	});
+
+	test("streaming with tools incrementally emits content deltas and then tool_calls", async () => {
+		const { handleChatCompletions } = await import("../src/openai/chat-completions.ts");
+		const deltas = [
+			"I will ",
+			"list the directory.\n",
+			"```tool_json\n",
+			'{"tool":"exec","parameters":{"command":"ls -la"}}\n',
+			"```",
+		];
+		const mockClient = {
+			providerId: "test-provider",
+			init: async () => {},
+			sendMessage: async () => {
+				const encoder = new TextEncoder();
+				return new ReadableStream({
+					start(controller) {
+						for (const d of deltas) {
+							const sseData = JSON.stringify({
+								type: "content_block_delta",
+								delta: { text: d },
+							});
+							controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
+						}
+						controller.close();
+					},
+				});
+			},
+			parseStream: async (body: ReadableStream<Uint8Array>, onDelta?: (d: string) => void) =>
+				parseClaudeStream(body, onDelta),
+			listModels: () => [{ id: "test-model", name: "Test" }],
+		};
+
+		const body: ChatCompletionRequest = {
+			model: "test",
+			stream: true,
+			messages: [{ role: "user", content: "List files" }],
+			tools: [
+				{
+					type: "function",
+					function: {
+						name: "exec",
+						description: "Run command",
+						parameters: { type: "object", properties: { command: { type: "string" } } },
+					},
+				},
+			],
+		};
+
+		const res = await handleChatCompletions(body, mockClient as any);
+		expect(res.status).toBe(200);
+		const text = await res.text();
+		const events = text
+			.split("\n\n")
+			.map((l) => l.trim())
+			.filter((l) => l.startsWith("data:") && l !== "data: [DONE]")
+			.map((l) => JSON.parse(l.slice(5).trim()));
+
+		const contentChunks = events
+			.map((e) => e.choices?.[0]?.delta?.content)
+			.filter((c): c is string => typeof c === "string");
+		expect(contentChunks.join("")).toBe("I will list the directory.\n");
+
+		const toolCallChunks = events.filter((e) => Array.isArray(e.choices?.[0]?.delta?.tool_calls));
+		expect(toolCallChunks.length).toBeGreaterThanOrEqual(2);
+		expect(toolCallChunks[0].choices[0].delta.tool_calls[0].function.name).toBe("exec");
+		expect(events[events.length - 1].choices[0].finish_reason).toBe("tool_calls");
+	});
 });

@@ -166,22 +166,24 @@ code,kbd,samp,pre{font-family:var(--font-mono)}
 .app{display:flex;height:100vh}
 
 /* ─── Sidebar ─── */
-.sidebar{width:60px;padding:14px 0;border-right:1px solid var(--border);background:var(--sidebar-bg);backdrop-filter:var(--surface-filter);display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;position:relative;z-index:10}
+.sidebar{width:216px;padding:16px 12px;border-right:1px solid var(--border);background:var(--sidebar-bg);backdrop-filter:var(--surface-filter);display:flex;flex-direction:column;align-items:stretch;gap:3px;flex-shrink:0;position:relative;z-index:10;overflow-y:auto}
 .sidebar::after{content:'';position:absolute;top:0;right:-1px;width:1px;height:100%;background:linear-gradient(180deg,var(--emerald) 0%,transparent 30%,transparent 70%,rgba(96,165,250,.3) 100%);opacity:.3}
-.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--emerald),#2dd4bf);border-radius:9px;margin-bottom:20px;display:flex;align-items:center;justify-content:center;font-weight:var(--fw-bold);font-size:var(--text-lg);color:var(--accent-contrast);box-shadow:0 2px 8px rgba(52,211,153,.25);transition:transform var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);cursor:default}
-.logo-icon:hover{transform:scale(1.05);box-shadow:0 4px 16px rgba(52,211,153,.35)}
-.nav-icon{width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:9px;cursor:pointer;transition:background-color var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out),transform var(--dur-quick) var(--ease-out);color:var(--text3);position:relative}
+.logo-icon{height:40px;padding:0 12px;background:linear-gradient(135deg,var(--emerald),#2dd4bf);border-radius:10px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-weight:var(--fw-bold);font-size:var(--text-base);color:var(--accent-contrast);box-shadow:0 2px 8px rgba(52,211,153,.25);cursor:default}
+.logo-icon::after{content:'Mail Hub 邮箱中心';font-size:14px;font-weight:700;letter-spacing:.2px;white-space:nowrap}
+.nav-group-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:8px 10px 4px;user-select:none}
+.nav-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:7px;cursor:pointer;color: inherit;position:relative;flex-shrink:0}
 .nav-icon:focus-visible{outline:none;box-shadow:var(--focus-ring)}
-.nav-icon:hover{background:var(--bg3);color:var(--text2)}
-.nav-icon:active{transform:scale(.96)}
-.nav-icon.active{background:var(--emerald-dim);color:var(--emerald)}
-.nav-icon.active::before{content:'';position:absolute;left:-14px;width:3px;height:18px;background:var(--emerald);border-radius:0 3px 3px 0}
+.nav-icon.active{color:var(--emerald)}
 .nav-icon svg{width:18px;height:18px}
-.nav-sep{width:24px;height:1px;background:var(--border);margin:8px 0}
-.sidebar-bottom{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:2px}
-.tooltip-wrap{position:relative}
-.tooltip-wrap:hover .tooltip{opacity:1;transform:translateX(0);pointer-events:auto}
-.tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateX(4px) translateY(-50%);background:var(--bg4);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;font-size:var(--text-sm);color:var(--text2);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 140ms var(--ease-out),transform 140ms var(--ease-out);z-index:20}
+.nav-sep{width:100%;height:1px;background:var(--border);margin:6px 0}
+.sidebar-bottom{margin-top:auto;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding-top:8px;border-top:1px solid var(--border)}
+.tooltip-wrap{position:relative;display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:9px;cursor:pointer;color:var(--text2);transition:background-color var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out)}
+.tooltip-wrap:hover{background:var(--bg3);color:var(--text)}
+.tooltip-wrap:has(.nav-icon.active){background:var(--emerald-dim);color:var(--emerald);font-weight:var(--fw-semibold)}
+.tooltip{position:static;transform:none;background:transparent;border:none;padding:0;font-size:var(--text-base);color:inherit;white-space:nowrap;opacity:1;pointer-events:auto}
+.quick-wizard{background:linear-gradient(135deg,var(--emerald-dim),var(--blue-dim));border:1px solid var(--border2);border-radius:var(--radius);padding:18px 20px;margin-bottom:20px;box-shadow:var(--surface-shadow)}
+.quick-wizard-steps{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:var(--text-sm);color:var(--text2)}
+.quick-step-badge{display:inline-flex;align-items:center;gap:6px;background:var(--panel-bg);border:1px solid var(--border);padding:4px 10px;border-radius:999px;font-weight:var(--fw-medium)}
 
 /* ─── Main ─── */
 .main{flex:1;padding:28px 36px;overflow-y:auto;background:var(--app-bg)}
@@ -686,6 +688,36 @@ tr.row-selected td:first-child{box-shadow:inset 3px 0 0 var(--emerald)}
         <div class="header-actions">
           <input class="search-box" placeholder="搜索邮箱、服务…" data-i18n-ph="inbox.search" id="dash-search" oninput="filterDashTableDebounced()">
         </div>
+      </div>
+
+      <div class="quick-wizard">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <div style="font-size:var(--text-lg);font-weight:var(--fw-bold);color:var(--text)">⚡ 三步极速取码工作台（零门槛快速收验证码）</div>
+          <div class="quick-wizard-steps" style="margin-bottom:0">
+            <span class="quick-step-badge">① 填网站点“一键生成邮箱”</span>
+            <span class="quick-step-badge">② 点击邮箱地址复制去注册</span>
+            <span class="quick-step-badge">③ 点“提取验证码”直接复制</span>
+          </div>
+        </div>
+        <div class="form-row" style="padding:0;background:transparent;border:none">
+          <div class="form-group">
+            <label>目标网站 / 用途（例如 deepseek.com）</label>
+            <input id="d-inbox-for" value="deepseek.com" placeholder="deepseek.com 或任意名称">
+          </div>
+          <div class="form-group">
+            <label data-i18n="common.provider">邮箱渠道</label>
+            <select id="d-inbox-provider"><option value="" data-i18n="inbox.auto">自动择优调度</option></select>
+          </div>
+          <div class="form-group">
+            <label data-i18n="common.domain">指定域名（可选）</label>
+            <input id="d-inbox-domain" placeholder="留空自动分配">
+          </div>
+          <div class="form-group auto-width">
+            <label>&nbsp;</label>
+            <button class="btn btn-primary" onclick="return createQuickInbox()">⚡ 一键生成临时邮箱</button>
+          </div>
+        </div>
+        <div id="d-inbox-result" style="margin-top:12px"></div>
       </div>
 
       <div class="grid-2col" style="align-items:stretch">
@@ -2949,6 +2981,14 @@ document.querySelectorAll('.nav-icon[data-view]').forEach(btn => {
     loadView(btn.dataset.view);
   });
 });
+document.querySelectorAll('.sidebar .tooltip-wrap').forEach(wrap => {
+  wrap.addEventListener('click', (e) => {
+    const icon = wrap.querySelector('.nav-icon');
+    if (icon && e.target !== icon && !icon.contains(e.target)) {
+      icon.click();
+    }
+  });
+});
 
 function labelForNavIcon(icon) {
   return icon.closest('.tooltip-wrap')?.querySelector('.tooltip')?.textContent?.trim() || icon.dataset.view || icon.getAttribute('aria-label') || '';
@@ -3355,6 +3395,60 @@ async function createInbox(prefix) {
     addActivity('green', `Created inbox <span class="activity-hl">${esc(result.address)}</span>`);
     if (prefix === 'i-') loadInboxes(); else loadDashboard();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+async function createQuickInbox() {
+  const forInput = document.getElementById('d-inbox-for');
+  if (forInput && !forInput.value.trim()) forInput.value = 'general';
+  const body = {
+    for: (forInput ? forInput.value.trim() : 'general') || 'general',
+  };
+  const p = document.getElementById('d-inbox-provider')?.value;
+  const d = document.getElementById('d-inbox-domain')?.value?.trim();
+  if (p) body.provider = p;
+  if (d) body.domain = d;
+  try {
+    const result = await api('/inbox', { method: 'POST', body: JSON.stringify(body) });
+    const box = document.getElementById('d-inbox-result');
+    if (box) {
+      box.innerHTML = `
+        <div class="code-box" style="margin:0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div class="code-meta">已分配渠道: <strong>${esc(result.provider)}</strong> · 点击下方邮箱地址即可复制</div>
+            <div class="code-value" onclick="return copyText(this)" title="点击复制邮箱地址" style="font-size:20px;cursor:pointer">${esc(result.address)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="return pollQuickOtp('${esc(result.id)}')">🔄 提取最新验证码</button>
+            <button class="btn" onclick="return viewInbox('${esc(result.id)}'),document.querySelector('.nav-icon[data-view=inboxes]').click()">查看完整收件箱</button>
+            <span id="quick-otp-display" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--emerald);padding:4px 10px"></span>
+          </div>
+        </div>
+      `;
+    }
+    toast(t('toast.inbox_created'));
+    loadDashboard();
+  } catch (e) { toast(e.message, 'error'); }
+  return false;
+}
+
+async function pollQuickOtp(inboxId) {
+  const el = document.getElementById('quick-otp-display');
+  if (el) el.textContent = '正在检查新邮件...';
+  try {
+    const res = await api(`/inbox/${inboxId}/code?timeout=5`);
+    if (res && res.code) {
+      if (el) {
+        el.innerHTML = `验证码: <span onclick="return copyText(this)" style="cursor:pointer;text-decoration:underline" title="点击复制验证码">${esc(res.code)}</span>`;
+      }
+      navigator.clipboard?.writeText(res.code).catch(() => {});
+      toast('已提取并复制验证码: ' + res.code);
+    } else {
+      if (el) el.textContent = '暂未收到验证码，请稍后再点';
+    }
+  } catch (e) {
+    if (el) el.textContent = '暂未收到验证码 (' + e.message + ')';
+  }
+  return false;
 }
 
 async function viewInbox(id) {

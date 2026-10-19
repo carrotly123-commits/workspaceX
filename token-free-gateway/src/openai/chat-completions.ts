@@ -1,7 +1,13 @@
-import { evictProviderClient } from "../providers/registry.ts";
+import {
+	evictProviderClient,
+	failoverClientAccount,
+	getClientForModel,
+	reportClientSuccess,
+} from "../providers/registry.ts";
 import type { WebProviderClient } from "../providers/types.ts";
 import { ProviderApiError, SessionExpiredError } from "../providers/types.ts";
 import { buildPromptFromMessages, parseToolResponse } from "../tool-calling/converter.ts";
+import { StreamingToolCallFilter } from "../tool-calling/parser.ts";
 import { makeChunk, sseDone, sseEvent, sseHeaders } from "./sse.ts";
 import type {
 	ChatCompletionRequest,
@@ -58,16 +64,49 @@ export async function handleChatCompletions(
 	return Promise.race([handler, timeout]);
 }
 
+function isFailoverEligibleError(err: unknown): boolean {
+	if (err instanceof SessionExpiredError) return true;
+	if (err instanceof ProviderApiError) {
+		return err.httpStatus === 401 || err.httpStatus === 403 || err.httpStatus === 429;
+	}
+	return false;
+}
+
+async function sendWithFailover(
+	model: string,
+	prompt: string,
+	initialClient: WebProviderClient,
+): Promise<{ stream: ReadableStream<Uint8Array>; client: WebProviderClient }> {
+	try {
+		const stream = await initialClient.sendMessage({ message: prompt, model });
+		reportClientSuccess(initialClient);
+		return { stream, client: initialClient };
+	} catch (err) {
+		if (isFailoverEligibleError(err) && failoverClientAccount(initialClient)) {
+			const nextClient = await getClientForModel(model);
+			if (nextClient && nextClient !== initialClient) {
+				console.warn(
+					`[chat-completions] Failing over "${initialClient.providerId}" to next account in pool...`,
+				);
+				const stream = await nextClient.sendMessage({ message: prompt, model });
+				reportClientSuccess(nextClient);
+				return { stream, client: nextClient };
+			}
+		}
+		throw err;
+	}
+}
+
 async function handleNonStreaming(
 	id: string,
 	model: string,
 	prompt: string,
 	hasTools: boolean,
 	body: ChatCompletionRequest,
-	client: WebProviderClient,
+	initialClient: WebProviderClient,
 ): Promise<Response> {
 	try {
-		const stream = await client.sendMessage({ message: prompt, model });
+		const { stream, client } = await sendWithFailover(model, prompt, initialClient);
 		const result = await client.parseStream(stream);
 
 		const { content, toolCalls, finishReason } = hasTools
@@ -160,15 +199,18 @@ async function handleStreaming(
 	prompt: string,
 	hasTools: boolean,
 	body: ChatCompletionRequest,
-	client: WebProviderClient,
+	initialClient: WebProviderClient,
 ): Promise<Response> {
 	// Await sendMessage BEFORE creating the SSE stream so that pre-stream
 	// errors (auth, rate-limit, model-not-available) return a proper HTTP
 	// error status instead of being buried inside an SSE event that the
 	// client cannot parse as a ChatCompletionChunk.
 	let providerStream: ReadableStream<Uint8Array>;
+	let client = initialClient;
 	try {
-		providerStream = await client.sendMessage({ message: prompt, model });
+		const sent = await sendWithFailover(model, prompt, initialClient);
+		providerStream = sent.stream;
+		client = sent.client;
 	} catch (err) {
 		return providerErrorResponse(err, "streaming (pre-stream)");
 	}
@@ -220,14 +262,27 @@ async function streamWithTools(
 	body: ChatCompletionRequest,
 	client: WebProviderClient,
 ) {
-	const result = await client.parseStream(providerStream);
-	const { content, toolCalls, finishReason } = parseToolResponse(result.text, body.tools);
+	const filter = new StreamingToolCallFilter((contentDelta) => {
+		w.writeChunk(id, model, [{ index: 0, delta: { content: contentDelta }, finish_reason: null }]);
+	});
+
+	const result = await client.parseStream(providerStream, (delta) => {
+		filter.push(delta);
+	});
+
+	const state = filter.finish();
+	const textToParse = result.text || state.fullText;
+	const { content, toolCalls, finishReason } = parseToolResponse(textToParse, body.tools);
 
 	if (finishReason === "tool_calls" && toolCalls) {
 		emitToolCallDeltas(w, id, model, toolCalls);
 		w.writeChunk(id, model, [{ index: 0, delta: {}, finish_reason: "tool_calls" }]);
 	} else {
-		if (content) {
+		if (state.unemittedTail) {
+			w.writeChunk(id, model, [
+				{ index: 0, delta: { content: state.unemittedTail }, finish_reason: null },
+			]);
+		} else if (!state.emittedContent && content) {
 			w.writeChunk(id, model, [{ index: 0, delta: { content }, finish_reason: null }]);
 		}
 		w.writeChunk(id, model, [{ index: 0, delta: {}, finish_reason: "stop" }]);

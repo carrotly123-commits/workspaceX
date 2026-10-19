@@ -3,14 +3,21 @@
  * All 13 Web AI providers are registered here with their model catalogs.
  */
 
-import { getCredentials } from "./auth-store.ts";
+import {
+	getAccountPool,
+	getCredentials,
+	markAccountCooldown,
+	markAccountSuccess,
+	selectAccount,
+} from "./auth-store.ts";
+import { loadCustomProviderDefinitions } from "./generic/index.ts";
 import type { ModelInfo, ProviderDefinition, WebProviderClient } from "./types.ts";
 
 // Lazy-loaded provider definitions to avoid importing all providers at startup
-let _definitions: ProviderDefinition[] | null = null;
+let _builtinDefinitions: ProviderDefinition[] | null = null;
 
-async function loadDefinitions(): Promise<ProviderDefinition[]> {
-	if (_definitions) return _definitions;
+async function loadBuiltinDefinitions(): Promise<ProviderDefinition[]> {
+	if (_builtinDefinitions) return _builtinDefinitions;
 
 	const [
 		claude,
@@ -42,7 +49,7 @@ async function loadDefinitions(): Promise<ProviderDefinition[]> {
 		import("./xiaomimo/index.ts"),
 	]);
 
-	_definitions = [
+	_builtinDefinitions = [
 		claude.definition,
 		chatgpt.definition,
 		deepseek.definition,
@@ -57,63 +64,129 @@ async function loadDefinitions(): Promise<ProviderDefinition[]> {
 		qwenCn.definition,
 		xiaomimo.definition,
 	];
-	return _definitions;
+	return _builtinDefinitions;
+}
+
+async function loadDefinitions(): Promise<ProviderDefinition[]> {
+	const builtins = await loadBuiltinDefinitions();
+	const builtinIds = new Set(builtins.map((d) => d.id));
+	const custom = loadCustomProviderDefinitions(builtinIds);
+	const merged = new Map<string, ProviderDefinition>();
+	for (const d of builtins) merged.set(d.id, d);
+	for (const d of custom) merged.set(d.id, d);
+	return [...merged.values()];
 }
 
 const clientCache = new Map<string, WebProviderClient>();
+const clientAccountMap = new Map<WebProviderClient, { providerId: string; accountId: string }>();
 
 /**
  * Evict a cached provider client so the next `getProviderClient` call
  * re-reads credentials from disk and creates a fresh instance.
  * Called automatically when a SessionExpiredError is thrown.
  */
-export function evictProviderClient(providerId: string): void {
-	const old = clientCache.get(providerId);
-	if (old) {
-		old.close?.().catch(() => {});
-		clientCache.delete(providerId);
-		console.log(`[registry] Evicted cached client for "${providerId}"`);
+export function evictProviderClient(providerId: string, accountId?: string): void {
+	for (const [cacheKey, client] of clientCache.entries()) {
+		if (
+			cacheKey === providerId ||
+			(accountId
+				? cacheKey === `${providerId}::${accountId}`
+				: cacheKey.startsWith(`${providerId}::`))
+		) {
+			client.close?.().catch(() => {});
+			clientCache.delete(cacheKey);
+			clientAccountMap.delete(client);
+		}
 	}
+	console.log(
+		`[registry] Evicted cached client for "${providerId}"${accountId ? ` (account=${accountId})` : ""}`,
+	);
+}
+
+/**
+ * Mark the account bound to a client as failed/cooling down and evict its cached instance.
+ * Returns true if the provider has additional accounts in the pool to fail over to.
+ */
+export function failoverClientAccount(client: WebProviderClient, cooldownMs = 60_000): boolean {
+	const meta = clientAccountMap.get(client);
+	const providerId = meta?.providerId ?? client.providerId;
+	const accountId = meta?.accountId ?? "default";
+	markAccountCooldown(providerId, accountId, cooldownMs);
+	evictProviderClient(providerId, accountId);
+	const pool = getAccountPool(providerId);
+	return pool.length > 1;
+}
+
+export function reportClientSuccess(client: WebProviderClient): void {
+	const meta = clientAccountMap.get(client);
+	if (meta) {
+		markAccountSuccess(meta.providerId, meta.accountId);
+	}
+}
+
+function findDefinition(
+	defs: ProviderDefinition[],
+	idOrAlias: string,
+): ProviderDefinition | undefined {
+	const direct = defs.find((d) => d.id === idOrAlias);
+	if (direct) return direct;
+	if (idOrAlias.endsWith("-web")) {
+		const stripped = idOrAlias.slice(0, -4);
+		return defs.find((d) => d.id === stripped);
+	}
+	return defs.find((d) => d.id === `${idOrAlias}-web`);
 }
 
 /**
  * Get or create a provider client for the given provider ID.
+ * Uses Round-Robin across the provider's multi-account pool when multiple accounts exist.
  * Returns null if no credentials are stored for this provider.
  */
 export async function getProviderClient(providerId: string): Promise<WebProviderClient | null> {
-	if (clientCache.has(providerId)) return clientCache.get(providerId)!;
-
-	const creds = getCredentials(providerId);
-	if (!creds) return null;
-
 	const defs = await loadDefinitions();
-	const def = defs.find((d) => d.id === providerId);
+	const def = findDefinition(defs, providerId);
 	if (!def) return null;
 
-	const client = def.factory(creds);
+	const selected = selectAccount(def.id);
+	if (!selected) return null;
+
+	const cacheKey = `${def.id}::${selected.accountId}`;
+	if (clientCache.has(cacheKey)) {
+		return clientCache.get(cacheKey)!;
+	}
+
+	const client = def.factory(selected.credentials);
 	await client.init();
-	clientCache.set(providerId, client);
+	clientCache.set(cacheKey, client);
+	clientAccountMap.set(client, { providerId: def.id, accountId: selected.accountId });
 	return client;
 }
 
 /**
  * Resolve a model name to a provider ID.
- * Supports both direct model IDs ("claude-sonnet-4-6") and
- * prefixed format ("claude-web/claude-sonnet-4-6").
+ * Supports:
+ * - direct model IDs ("claude-sonnet-4-6")
+ * - prefixed format ("claude-web/claude-sonnet-4-6" or "claude/claude-sonnet-4-6")
+ * - direct provider/channel ID ("my-custom-channel" or "deepseek")
  */
 export async function resolveModelToProvider(model: string): Promise<string | null> {
 	const defs = await loadDefinitions();
 
 	// Check prefixed format: "provider-id/model-id"
 	if (model.includes("/")) {
-		const providerId = model.split("/")[0];
-		if (defs.some((d) => d.id === providerId)) return providerId!;
+		const prefix = model.split("/")[0]!;
+		const matched = findDefinition(defs, prefix);
+		if (matched) return matched.id;
 	}
 
 	// Search all providers for matching model ID
 	for (const def of defs) {
 		if (def.models.some((m) => m.id === model)) return def.id;
 	}
+
+	// Fallback: allow passing the provider/channel ID directly as the model name
+	const byProviderId = findDefinition(defs, model);
+	if (byProviderId) return byProviderId.id;
 
 	return null;
 }
@@ -152,9 +225,7 @@ export async function listProviderDefinitions(): Promise<ProviderDefinition[]> {
  * Clear a cached provider client (e.g. after re-authentication).
  */
 export function clearProviderCache(providerId: string): void {
-	const client = clientCache.get(providerId);
-	if (client?.close) client.close();
-	clientCache.delete(providerId);
+	evictProviderClient(providerId);
 }
 
 const SESSION_CHECK_TIMEOUT_MS = 10_000;

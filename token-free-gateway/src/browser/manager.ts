@@ -23,12 +23,39 @@ class BrowserManager {
 	private context: BrowserContext | null = null;
 	private connecting: Promise<BrowserContext> | null = null;
 	private disconnected = false;
+	private pageLocks = new Map<string, Promise<unknown>>();
 
 	static getInstance(): BrowserManager {
 		if (!BrowserManager.instance) {
 			BrowserManager.instance = new BrowserManager();
 		}
 		return BrowserManager.instance;
+	}
+
+	/**
+	 * Serialize concurrent DOM operations on the same domain/page so two requests
+	 * never interleave typing or response polling on the same tab.
+	 */
+	async withPageLock<T>(lockKey: string, fn: () => Promise<T>): Promise<T> {
+		const prev = this.pageLocks.get(lockKey) ?? Promise.resolve();
+		let release!: () => void;
+		const current = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const chained = prev.then(
+			() => current,
+			() => current,
+		);
+		this.pageLocks.set(lockKey, chained);
+		try {
+			await prev.catch(() => {});
+			return await fn();
+		} finally {
+			release();
+			if (this.pageLocks.get(lockKey) === chained) {
+				this.pageLocks.delete(lockKey);
+			}
+		}
 	}
 
 	/**
