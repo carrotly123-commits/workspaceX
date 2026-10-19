@@ -230,6 +230,7 @@ export async function semiAutoSignupFlow(
           }
         }
       } catch (err) {
+        if (ctx.mode === "auto") throw err;
         ctx.onProgress(
           `Auto steps failed (${err instanceof Error ? err.message : err}). Falling back to manual...`,
           "warn",
@@ -241,7 +242,12 @@ export async function semiAutoSignupFlow(
     if (steps.isSuccess) {
       const ok = await steps.isSuccess(page).catch(() => false);
       if (!ok) {
-        ctx.onProgress("Success detector returned false — still trying to harvest session...", "warn");
+        return {
+          success: false,
+          status: "unverified",
+          identity: ctx.identity,
+          message: "Login evidence did not match. Credentials were not captured or exported; inspect the site and configure a reliable success detector.",
+        };
       }
     }
 

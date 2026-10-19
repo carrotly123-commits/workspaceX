@@ -98,6 +98,28 @@ token-free-gateway start
 # 客户端 base_url → http://localhost:3456/v1
 ```
 
+## 检查页面与验证登录
+
+```bash
+npx tsx src/index.ts inspect https://chat.example.com/login
+npx tsx src/index.ts verify https://chat.example.com --success-cookie session
+# alternatively, use a logged-in-only selector
+npx tsx src/index.ts verify https://chat.example.com --success-selector '[data-testid="account-menu"]'
+```
+
+- `inspect <platform|url>` 只报告页面候选项数量及歧义，不读取或输出凭据。它不能发现网站实际 API 或模型能力。
+- `verify <platform|url>` 只检查浏览器中已打开的目标标签页；不会捕获会话或导出凭据。必须配置 `--success-cookie <cookie名称>` 和/或 `--success-selector <CSS选择器>`。Cookie 按精确名称、非空且未过期匹配，支持 HttpOnly；选择器须匹配可见元素。若两项都配置，则两项都必须通过。
+- 通用站点需配置登录成功证明。建议用非分析类、确实仅登录后存在的 Cookie，或登录后专属且可见的元素；不要用通用 `body`。缺少证明或验证失败时应视为 `unverified`，不导出。Cookie 命中只证明配置的登录信号存在，不证明网关连通或模型可用。
+- `capture` 面向浏览器中已有的登录会话，不会替你创建邮箱。
+
+### GitHub OAuth（现有账号）
+
+```bash
+npx tsx src/index.ts register https://chat.example.com/signup --auth github --email existing-label --success-cookie actual_cookie --save-platform --mode semi --count 1
+```
+
+这是通过 GitHub 登录目标网站的单账号半自动流程。你必须在浏览器中手动登录已有 GitHub 用户并完成授权/同意；它不会创建 GitHub 账号。`--email existing-label` 是已有邮箱配置标签的示例，不是邮箱地址或凭据。成功与否仍取决于目标网站及其配置的登录证明；不要据此声称已完成 GitHub 实时集成。
+
 ### 4. 查看与导出
 
 ```bash
