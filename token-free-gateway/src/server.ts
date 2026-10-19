@@ -58,6 +58,28 @@ async function handleRequest(req: Request): Promise<Response> {
 		return handleUiRoute();
 	}
 
+	const registrarFiles: Record<string, string> = {
+		"/registrar": "index.html",
+		"/registrar/": "index.html",
+		"/registrar/app.js": "app.js",
+		"/registrar/report.js": "report.js",
+		"/registrar/style.css": "style.css",
+	};
+	if (req.method === "GET" && Object.hasOwn(registrarFiles, pathname)) {
+		return new Response(
+			Bun.file(join(import.meta.dir, "public", "registrar", registrarFiles[pathname]!)),
+			{
+				headers: {
+					"Cache-Control": "no-store",
+					"X-Content-Type-Options": "nosniff",
+					"Referrer-Policy": "no-referrer",
+					"Content-Security-Policy":
+						"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+				},
+			},
+		);
+	}
+
 	const authError = authenticate(req, config.gatewayApiKey);
 	if (authError) return withCors(authError);
 

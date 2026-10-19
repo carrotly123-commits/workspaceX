@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>注册报告 · workspaceX</title>
+  <link rel="stylesheet" href="/registrar/style.css">
+  <script type="module" src="/registrar/app.js"></script>
+</head>
+<body>
+  <header class="topbar"><div class="shell topbar-content">
+    <a class="brand" href="/registrar"><span class="brand-mark">W</span>workspace<span class="brand-x">X</span><span class="brand-caption">REGISTRAR</span></a>
+    <nav aria-label="工作区导航"><a href="/registrar" aria-current="page">注册报告</a><a href="/">渠道工作台 <span aria-hidden="true">↗</span></a></nav>
+  </div></header>
+  <main class="shell">
+    <div class="heading"><div><p class="eyebrow">UNIVERSAL REGISTRAR <span> / </span> 五阶段接入报告</p><h1>每一步进展，都有据可查。</h1><p class="subtitle">从候选站点到凭证摘要，区分发现、建议、注册结果与真实可用性。</p></div><span class="mode-pill"><i></i> 本地只读模式</span></div>
+    <section class="import-panel" aria-labelledby="import-title">
+      <div class="import-icon" aria-hidden="true">↥</div>
+      <div class="import-copy"><h2 id="import-title">导入 Registrar 报告</h2><p>支持 #2 的 discover / probe / plan / pipeline、账号存储与凭证 JSON。</p><p class="privacy">仅在浏览器内解析 · 不上传文件 · 不保存密钥 · 最大 5 MB</p></div>
+      <div class="import-actions"><button id="demo" class="button secondary" type="button">查看示例</button><button id="import" class="button primary" type="button">选择 JSON 文件 <span aria-hidden="true">＋</span></button><input id="file" type="file" accept=".json,application/json" hidden></div>
+    </section>
+    <div class="report-bar"><p id="report-source" role="status">尚未导入报告</p><div><button id="export" class="text-button" type="button" disabled>导出脱敏摘要</button><button id="clear" class="text-button" type="button" disabled>清除报告</button></div></div>
+    <p id="import-error" class="error" role="alert" hidden></p>
+    <section class="metrics" aria-label="报告概览">
+      <div><p>候选站点</p><strong id="metric-sites">—</strong><small>来自发现报告</small></div>
+      <div><p>策略评估</p><strong id="metric-plans">—</strong><small>建议 ≠ 成功率</small></div>
+      <div><p>账号结果</p><strong id="metric-accounts">—</strong><small>按原始报告状态展示</small></div>
+      <div><p>凭证记录</p><strong id="metric-creds">—</strong><small>调用能力仍需独立验证</small></div>
+    </section>
+    <div class="section-heading"><h2>接入流程</h2><span>选择阶段查看报告记录</span></div>
+    <div id="stages" class="stages" role="group" aria-label="报告阶段"></div>
+    <div class="workspace">
+      <section class="panel records" aria-labelledby="records-title">
+        <div class="panel-head"><div><h2 id="records-title">网站发现</h2><p id="records-count">尚无报告记录</p></div><label class="search"><span aria-hidden="true">⌕</span><span class="sr-only">搜索站点或状态</span><input id="search" type="search" placeholder="搜索站点或状态" maxlength="200"></label></div>
+        <div id="records" class="record-list"></div>
+      </section>
+      <aside class="panel detail" aria-labelledby="detail-title"><div class="panel-head"><h2 id="detail-title">记录详情</h2><span class="detail-label">只读</span></div><div id="detail" class="detail-body"></div></aside>
+    </div>
+    <section class="boundary"><span aria-hidden="true">ⓘ</span><div><h2>让报告说清楚，而不是替结果背书</h2><p>#2 当前提供 CLI 工作流，未提供任务控制 HTTP API。本页不会启动注册、发放密钥或连接外部站点。凭证存在和质量评级不代表调用成功；不会自动导入网关。</p></div></section>
+    <details class="help"><summary>哪些文件可以导入？</summary><p>可导入 <code>discovered-sites.json</code>、<code>accounts.json</code>、<code>credentials-2api.json</code>，以及 discover、probe、plan、pipeline 输出的完整 JSON 对象或数组。不支持混有日志的终端文本、JSONL、keys 或 env 文件。</p><p>每次导入替换当前报告，不会自动补齐缺失阶段。账号邮箱、密码、完整 URL 路径、请求头和密钥值均不展示；脱敏摘要仅用于审阅，不是原始凭证备份。</p></details>
+    <footer><span>workspaceX <span class="dot">·</span> Universal Registrar</span><span>发现 → 探测 → 策略 → 注册 → 凭证</span></footer>
+  </main>
+</body>
+</html>
