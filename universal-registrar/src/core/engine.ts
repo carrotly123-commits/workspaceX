@@ -113,6 +113,14 @@ export class RegistrationEngine {
     } else if (this.adapters.has(`${id}-web`)) {
       return this.adapters.get(`${id}-web`);
     }
+    if (/^https?:\/\//i.test(id) || id.includes(".") || id.includes("/")) {
+      try {
+        const derivedId = createAdHocAdapter(id).id;
+        if (this.adapters.has(derivedId)) return this.adapters.get(derivedId);
+      } catch {
+        // ignore
+      }
+    }
     return undefined;
   }
 
@@ -406,6 +414,7 @@ export class RegistrationEngine {
     let effectiveConcurrency = Math.max(1, options.concurrency ?? this.config.concurrency ?? 1);
     let effectiveDelayMs = this.config.delayBetweenMs;
     const maxRetries = Math.max(0, options.maxRetries ?? this.config.maxRetries ?? 1);
+    let targetPlatformId = platformId;
 
     // Optional automatic route probing & optimal strategy selection before bulk run
     if (options.autoPlan) {
@@ -413,6 +422,7 @@ export class RegistrationEngine {
         const plan = await this.planStrategy(platformId, {
           maxConcurrency: effectiveConcurrency,
         });
+        targetPlatformId = plan.platformId;
         effectiveMode = effectiveMode ?? plan.mode;
         if (!options.concurrency) {
           effectiveConcurrency = plan.recommendedConcurrency;
@@ -454,7 +464,7 @@ export class RegistrationEngine {
               ? baseIdentity
               : { ...(baseIdentity ?? {}), email: undefined };
 
-          lastAcc = await this.runOne(platformId, {
+          lastAcc = await this.runOne(targetPlatformId, {
             identity: identityForAttempt,
             mode: effectiveMode,
             exportTfg: options.exportTfg,

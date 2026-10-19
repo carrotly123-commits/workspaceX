@@ -184,7 +184,7 @@ export function planToGenericPlatformConfig(
     name: `${plan.platformId} (${new URL(plan.siteUrl).hostname})`,
     signupUrl: plan.signupUrl,
     preferredMode: plan.mode,
-    needsEmail: plan.chosenRoute.requiresEmailVerification || true,
+    needsEmail: Boolean(plan.chosenRoute.requiresEmailVerification),
     needsPhone: plan.chosenRoute.requiresPhone,
     tips: plan.reasoning.join(" | "),
     selectors: {

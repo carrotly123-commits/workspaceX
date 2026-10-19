@@ -96,9 +96,99 @@
       grid-template-columns: 380px 1fr 420px;
       gap: 20px;
       align-items: start;
+      margin-bottom: 24px;
     }
     @media (max-width: 1180px) {
       .grid { grid-template-columns: 1fr; }
+    }
+    .section-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 6px 0 14px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+    .section-banner h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .section-banner span {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .form-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .probe-box, .log-box, .code-preview {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-subtle);
+      padding: 10px 12px;
+      font-size: 12px;
+      max-height: 260px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    .log-box, .code-preview {
+      font-family: var(--mono);
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: #16211e;
+      color: #d8ede7;
+    }
+    .route-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      margin-top: 6px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--mono);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+    .badge.warn {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+    .badge.err {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .checkbox-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .checkbox-line input {
+      width: auto;
+      margin: 0;
     }
     .card {
       background: var(--surface);
@@ -270,18 +360,156 @@
       <div class="brand-badge">TF</div>
       <div>
         <h1>Token-Free Gateway 控制台</h1>
-        <p>免 API Key · 任意网页 AI 渠道即填即用 · 多账号池轮询防限流 · 标准 OpenAI 接口</p>
+        <p>外部网站发现 → 探测注册途径 → 最优注册方案 → 大量并发注册 → 2API Key/Token 提取 → 免 Token OpenAI 网关</p>
       </div>
     </div>
     <div class="status-strip">
       <span class="pill" id="st-gateway">网关检测中...</span>
       <span class="pill" id="st-browser">Chrome CDP 检测中...</span>
+      <span class="pill" id="st-registrar">2API 凭证池检测中...</span>
       <span class="pill copy-box" onclick="copyApiBase()" title="点击复制 OpenAI 兼容接口地址">
         API Base: <strong id="api-base-url">http://127.0.0.1:3456/v1</strong> 📋
       </span>
       <button type="button" class="btn btn-sm" onclick="loadOverview()">🔄 刷新状态</button>
     </div>
   </header>
+
+  <!-- ==================== 第一排：#2 五阶段自动注册机与 2API 凭证中心 ==================== -->
+  <div class="section-banner">
+    <h2>🚀 自动化注册流水线 & 2API 凭证中心 (Discover → Probe → Plan → Bulk Register → 2API Keys)</h2>
+    <span>支持外部自行发现 AI 站点、探测接口与验证码阻碍、自动优选协议/浏览器方案、高并发批量注册并铸造 sk-... Key</span>
+  </div>
+
+  <div class="grid">
+    <!-- 阶段 1-3：外部网站发现、探测注册途径、选择最优注册方案 -->
+    <section class="card">
+      <div class="card-title">
+        <span>🔍 1. 外部网站发现 & 探测选优</span>
+        <span class="badge" id="discover-count-badge">已发现 0 站</span>
+      </div>
+      <p class="card-desc">
+        输入外部发现的 AI 网站或导航站网址（支持多行），探测其框架（NewAPI / OneAPI / Web AI）、注册途径与验证码阻碍，自动选出最优注册方案。
+      </p>
+      <div class="form-group">
+        <label>目标外部网站 URL / 导航页地址 *</label>
+        <textarea id="reg-discover-input" rows="3" placeholder="每行一个网址，例如：&#10;https://api.example.com&#10;https://chat.example.org/register"></textarea>
+      </div>
+      <label class="checkbox-line">
+        <input type="checkbox" id="reg-discover-crawl" />
+        <span>爬取页面内包含的所有外部 AI 网站链接 (--crawl)</span>
+      </label>
+      <label class="checkbox-line">
+        <input type="checkbox" id="reg-save-platform" checked />
+        <span>选出最优方案后自动保存至 config/platforms/*.json</span>
+      </label>
+      <div class="btn-row">
+        <button type="button" class="btn btn-sm" id="btn-discover" onclick="runDiscoverSites()">🔍 1. 发现网站</button>
+        <button type="button" class="btn btn-sm" id="btn-probe" onclick="runProbeSite()">🛰️ 2. 探测途径</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-plan" onclick="runPlanStrategy()">🧠 3. 选最优方案</button>
+      </div>
+      <div id="reg-probe-result" class="probe-box">
+        <div style="color:var(--text-muted)">填入网址后点击上方按钮，在此查看站点框架、候选注册途径评分与最优执行方案...</div>
+      </div>
+    </section>
+
+    <!-- 阶段 4：大量并发注册 & 一键五阶段全链路流水线 -->
+    <section class="card">
+      <div class="card-title">
+        <span>⚡ 2. 大量并发注册 & 全链路流水线</span>
+        <span class="badge" id="job-status-badge">空闲</span>
+      </div>
+      <p class="card-desc">
+        使用选定的最优方案（纯 HTTP 协议极速注册或隔离浏览器自动流）批量注册账号，自动换新邮箱重试并铸造每个账号的专属 Key/Token。
+      </p>
+      <div class="form-group">
+        <label>目标网站 URL 或平台 ID *</label>
+        <input id="reg-target" list="builtin-providers" placeholder="例如 https://api.example.com 或 deepseek" />
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>批量注册数量 (Count)</label>
+          <input type="number" id="reg-count" value="5" min="1" max="500" />
+        </div>
+        <div class="form-group">
+          <label>并发工作数 (Concurrency)</label>
+          <input type="number" id="reg-concurrency" value="3" min="1" max="20" />
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>邮箱源 (Email Provider)</label>
+          <select id="reg-email-provider">
+            <option value="auto">auto (MailHub → Mail.tm 自动切换)</option>
+            <option value="mailhub">mailhub (本地 Mail Hub :3100)</option>
+            <option value="mailtm">mailtm (免配置在线临时邮箱)</option>
+            <option value="manual">manual (手动输入)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>执行模式 / 失败重试</label>
+          <div style="display:flex;gap:6px">
+            <select id="reg-mode" style="flex:1">
+              <option value="">自动按最优方案</option>
+              <option value="auto">auto (全自动)</option>
+              <option value="semi">semi (半自动)</option>
+              <option value="manual">manual (仅抓会话)</option>
+            </select>
+            <input type="number" id="reg-retries" value="1" min="0" max="5" style="width:68px" title="单账号失败自动换邮箱重试次数" />
+          </div>
+        </div>
+      </div>
+      <label class="checkbox-line">
+        <input type="checkbox" id="reg-auto-plan" checked />
+        <span>注册前自动探测注册途径并应用最优方案 (--auto-plan)</span>
+      </label>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btn-bulk-register" style="flex:1" onclick="runBulkRegister()">⚡ 启动批量注册</button>
+        <button type="button" class="btn" id="btn-full-pipeline" style="flex:1;border-color:var(--primary);color:var(--primary)" onclick="runFullPipelineUi()">🔥 一键五阶段流水线</button>
+      </div>
+      <div id="reg-job-box" class="log-box" style="height:175px">等待启动批量注册或全链路流水线任务...</div>
+    </section>
+
+    <!-- 阶段 5：提供有意义的 2API 凭证（API Key / AccessToken / ReadyHeaders） -->
+    <section class="card">
+      <div class="card-title">
+        <span>🔑 3. 2API 有意义凭证中心</span>
+        <span id="cred-summary" style="font-size:12px;color:var(--primary);font-weight:600">0 Key / 0 Token</span>
+      </div>
+      <p class="card-desc">
+        为每个注册成功的账号提供可直接用于自写 2API 的 <code>apiKey (sk-...)</code>、<code>accessToken</code> 与即插即用请求头 <code>readyHeaders</code>。
+      </p>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>按站点/平台筛选</label>
+          <input id="cred-platform-filter" placeholder="留空显示全部平台" onchange="loadCredentialsCenter()" />
+        </div>
+        <div class="form-group">
+          <label>2API 导出格式</label>
+          <select id="cred-format" onchange="loadCredentialsCenter()">
+            <option value="json">json (2API 结构化凭证包)</option>
+            <option value="keys">keys (纯 sk-... / Token 每行一个)</option>
+            <option value="jsonl">jsonl (按行 JSON 流)</option>
+            <option value="env">env (环境变量 POOL_KEYS=...)</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-bottom:10px">
+        <button type="button" class="btn btn-sm" onclick="copyFormattedCredentials()">📋 复制凭证内容</button>
+        <button type="button" class="btn btn-sm" onclick="downloadFormattedCredentials()">⬇️ 下载凭证文件</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="exportAndSyncCredentials()">💾 落盘并同步至网关</button>
+      </div>
+      <div id="cred-account-list" class="probe-box" style="max-height:135px;margin-top:0">
+        <div style="color:var(--text-muted)">暂无已产出的账号凭证...</div>
+      </div>
+      <div id="cred-preview" class="code-preview" style="height:110px;margin-top:8px">// 2API 凭证预览</div>
+    </section>
+  </div>
+
+  <!-- ==================== 第二排：免 Token 网关渠道管理与在线对话测试 ==================== -->
+  <div class="section-banner">
+    <h2>💬 免 Token 网关渠道池 & OpenAI 在线对话测试台 (Playground)</h2>
+    <span>支持手动粘贴 Cookie 挂载任意网页 AI、多账号轮询防 429 限流、直接测试 /v1/chat/completions 流式响应</span>
+  </div>
 
   <div class="grid">
     <!-- 左栏：快速添加新渠道或新账号 -->
@@ -388,14 +616,450 @@
       return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
 
+    let latestCredentialText = '';
+    let activeJobTimer = null;
+
+    function copyTextToClipboard(text, label) {
+      navigator.clipboard.writeText(String(text || ''));
+      showToast(`已复制 ${label || '内容'}`);
+    }
+
+    function useTargetForRegister(targetUrlOrId, recConcurrency) {
+      document.getElementById('reg-target').value = targetUrlOrId;
+      if (recConcurrency) {
+        document.getElementById('reg-concurrency').value = String(recConcurrency);
+      }
+      showToast(`已填入目标站点: ${targetUrlOrId}`);
+    }
+
+    function renderDiscoveredSites(sites) {
+      const box = document.getElementById('reg-probe-result');
+      document.getElementById('discover-count-badge').textContent = `已发现 ${sites.length} 站`;
+      if (!sites.length) {
+        box.innerHTML = '<div style="color:var(--text-muted)">未发现有效外部站点，请检查输入的网址。</div>';
+        return;
+      }
+      box.innerHTML = sites.map((s) => {
+        const fwBadge = `<span class="badge">${esc(s.framework)}</span>`;
+        const reachBadge = s.reachable
+          ? '<span class="badge">可达</span>'
+          : '<span class="badge err">不可达</span>';
+        const oaiBadge = s.openAiCompatible ? '<span class="badge">/v1/models</span>' : '';
+        const signupUrl = s.signupCandidates?.[0] || s.url;
+        return `<div class="route-item">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            <strong>${esc(s.title || s.id)}</strong>
+            <div>${fwBadge} ${reachBadge} ${oaiBadge}</div>
+          </div>
+          <div style="color:var(--text-secondary);margin-top:4px;word-break:break-all">注册入口: <code>${esc(signupUrl)}</code></div>
+          <div class="btn-row" style="margin-top:6px">
+            <button type="button" class="btn btn-sm" onclick="probeSpecificTarget('${esc(signupUrl)}')">🛰️ 探测此站</button>
+            <button type="button" class="btn btn-sm" onclick="planSpecificTarget('${esc(signupUrl)}')">🧠 选最优方案</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="useTargetForRegister('${esc(signupUrl)}')">➡️ 填入注册</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderProbeReport(report) {
+      const box = document.getElementById('reg-probe-result');
+      const openBadge = report.registrationOpen
+        ? '<span class="badge">开放注册</span>'
+        : '<span class="badge err">注册已关闭</span>';
+      const keyBadge = report.credentialHints?.supportsApiKeyCreation
+        ? '<span class="badge">支持自动铸造 sk- Key</span>'
+        : `<span class="badge warn">凭证: ${esc(report.credentialHints?.expectedAuthType || 'cookie')}</span>`;
+
+      const routesHtml = (report.routes || []).map((r) => {
+        const scoreClass = r.feasibilityScore >= 75 ? '' : r.feasibilityScore >= 45 ? 'warn' : 'err';
+        return `<div class="route-item">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>途径: ${esc(r.type)} (${esc(r.method)})</strong>
+            <span class="badge ${scoreClass}">可行性 ${r.feasibilityScore}/100</span>
+          </div>
+          <div style="color:var(--text-secondary);margin-top:3px">
+            邮箱验证: ${r.requiresEmailVerification ? '是' : '免验证'} · 手机验证: ${r.requiresPhone ? '是' : '否'} · 验证码: <code>${esc(r.captchaType)}</code>
+          </div>
+          <div style="color:var(--text-muted);margin-top:2px">${esc((r.notes || []).join('；'))}</div>
+        </div>`;
+      }).join('');
+
+      box.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          <strong>${esc(report.platformId)} (${esc(report.framework)})</strong>
+          <div>${openBadge} ${keyBadge}</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);word-break:break-all">入口: <code>${esc(report.signupUrl)}</code></div>
+        ${routesHtml || '<div style="color:var(--text-muted);margin-top:6px">未探测到可用途径</div>'}
+        <div class="btn-row" style="margin-top:8px">
+          <button type="button" class="btn btn-primary btn-sm" onclick="planSpecificTarget('${esc(report.signupUrl)}')">🧠 生成最优注册方案</button>
+          <button type="button" class="btn btn-sm" onclick="useTargetForRegister('${esc(report.signupUrl)}')">➡️ 填入右侧注册</button>
+        </div>
+      `;
+    }
+
+    function renderStrategyPlan(plan) {
+      const box = document.getElementById('reg-probe-result');
+      const scoreClass = plan.score >= 75 ? '' : plan.score >= 45 ? 'warn' : 'err';
+      box.innerHTML = `
+        <div class="route-item" style="border-color:var(--primary)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            <strong>✅ 最优方案: ${esc(plan.strategyKind)}</strong>
+            <span class="badge ${scoreClass}">评分 ${plan.score}/100</span>
+          </div>
+          <div style="margin-top:4px;color:var(--text-secondary)">
+            选中途径: <code>${esc(plan.chosenRoute?.type)}</code> · 模式: <code>${esc(plan.mode)}</code> · 推荐并发: <strong>${plan.recommendedConcurrency}</strong>
+          </div>
+          <div style="margin-top:4px;color:var(--text-muted)">
+            ${esc((plan.reasoning || []).join(' '))}
+          </div>
+          <div class="btn-row" style="margin-top:8px">
+            <button type="button" class="btn btn-primary btn-sm" onclick="useTargetForRegister('${esc(plan.signupUrl)}', ${plan.recommendedConcurrency || 1})">⚡ 立即应用此方案去批量注册</button>
+          </div>
+        </div>
+      `;
+      useTargetForRegister(plan.signupUrl, plan.recommendedConcurrency);
+    }
+
+    function getPrimaryInputUrl() {
+      const raw = document.getElementById('reg-discover-input').value.trim();
+      const first = raw.split(/[\r\n,]+/).map((s) => s.trim()).find(Boolean);
+      return first || document.getElementById('reg-target').value.trim();
+    }
+
+    async function runDiscoverSites() {
+      const raw = document.getElementById('reg-discover-input').value.trim();
+      if (!raw) {
+        showToast('请先输入待发现的网站 URL 或导航页网址');
+        return;
+      }
+      const btn = document.getElementById('btn-discover');
+      btn.disabled = true;
+      try {
+        const crawl = document.getElementById('reg-discover-crawl').checked;
+        const res = await fetch('/api/registrar/discover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inputs: raw, crawlDirectoryPages: crawl }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '发现站点失败');
+        renderDiscoveredSites(data.sites || []);
+        if (data.sites?.[0]?.signupCandidates?.[0]) {
+          document.getElementById('reg-target').value = data.sites[0].signupCandidates[0];
+        }
+        showToast(`成功发现 ${(data.sites || []).length} 个外部站点`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function probeSpecificTarget(target) {
+      const url = target || getPrimaryInputUrl();
+      if (!url) {
+        showToast('请先输入目标网站 URL');
+        return;
+      }
+      const btn = document.getElementById('btn-probe');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/registrar/probe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: url }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '探测失败');
+        renderProbeReport(data.report);
+        showToast(`完成探测: ${data.report.platformId}`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runProbeSite() {
+      await probeSpecificTarget(getPrimaryInputUrl());
+    }
+
+    async function planSpecificTarget(target) {
+      const url = target || getPrimaryInputUrl();
+      if (!url) {
+        showToast('请先输入目标网站 URL');
+        return;
+      }
+      const btn = document.getElementById('btn-plan');
+      btn.disabled = true;
+      try {
+        const savePlatform = document.getElementById('reg-save-platform').checked;
+        const maxConcurrency = Number(document.getElementById('reg-concurrency').value || 3);
+        const res = await fetch('/api/registrar/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: url, savePlatform, maxConcurrency }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '规划方案失败');
+        renderStrategyPlan(data.plan);
+        showToast(`最优方案: ${data.plan.strategyKind} (${data.plan.score}分)`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runPlanStrategy() {
+      await planSpecificTarget(getPrimaryInputUrl());
+    }
+
+    function renderJobState(job) {
+      const badge = document.getElementById('job-status-badge');
+      const box = document.getElementById('reg-job-box');
+      if (!job) return;
+      badge.textContent = job.status === 'running' ? '运行中...' : job.status === 'completed' ? '已完成' : '失败';
+      badge.className = `badge ${job.status === 'completed' ? '' : job.status === 'running' ? 'warn' : 'err'}`;
+
+      const lines = (job.logs || []).map((l) => `[${l.time.slice(11, 19)}] [${l.level.toUpperCase()}] ${l.message}`);
+      if (job.summary) {
+        lines.push(
+          `\n=== 批量注册汇总 (${job.summary.platformId}) ===`,
+          `成功: ${job.summary.succeeded}/${job.summary.totalRequested} | 铸造 sk- Key: ${job.summary.apiKeysMinted} | Bearer Token: ${job.summary.bearerTokensCaptured} | 耗时: ${job.summary.durationMs}ms`,
+        );
+      }
+      if (job.pipelineResult) {
+        lines.push(
+          `\n=== 全链路五阶段流水线完成 ===`,
+          `发现站点: ${job.pipelineResult.discovered?.length || 0} | 导出有效账号: ${job.pipelineResult.exportedCredentials?.totalAccounts || 0} | 铸造 sk- Key: ${job.pipelineResult.exportedCredentials?.totalApiKeys || 0}`,
+        );
+      }
+      if (job.error) {
+        lines.push(`\n❌ 错误: ${job.error}`);
+      }
+      box.textContent = lines.join('\n') || '任务已启动，正在等待日志输出...';
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function pollJobUntilDone(jobId) {
+      if (activeJobTimer) clearInterval(activeJobTimer);
+      activeJobTimer = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/registrar/jobs/${encodeURIComponent(jobId)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.job) {
+            renderJobState(data.job);
+            if (data.job.status !== 'running') {
+              clearInterval(activeJobTimer);
+              activeJobTimer = null;
+              await loadOverview();
+              await loadCredentialsCenter();
+              showToast(data.job.status === 'completed' ? '✅ 注册任务已完成并同步凭证！' : `❌ 任务失败: ${data.job.error || ''}`);
+            }
+          }
+        } catch {}
+      }, 1000);
+    }
+
+    async function runBulkRegister() {
+      const target = document.getElementById('reg-target').value.trim() || getPrimaryInputUrl();
+      if (!target) {
+        showToast('请先输入或选择目标网站 URL / 平台 ID');
+        return;
+      }
+      const count = Math.max(1, Number(document.getElementById('reg-count').value || 1));
+      const concurrency = Math.max(1, Number(document.getElementById('reg-concurrency').value || 1));
+      const maxRetries = Math.max(0, Number(document.getElementById('reg-retries').value || 0));
+      const emailProvider = document.getElementById('reg-email-provider').value;
+      const mode = document.getElementById('reg-mode').value || undefined;
+      const autoPlan = document.getElementById('reg-auto-plan').checked;
+      const savePlatform = document.getElementById('reg-save-platform').checked;
+
+      const btn = document.getElementById('btn-bulk-register');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/registrar/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            platform: target,
+            count,
+            concurrency,
+            maxRetries,
+            emailProvider,
+            mode,
+            autoPlan,
+            savePlatform,
+            async: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '启动批量注册失败');
+        renderJobState(data.job);
+        pollJobUntilDone(data.jobId);
+        showToast(`已启动批量注册任务 (${count} 个账号)`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function runFullPipelineUi() {
+      const rawInputs = document.getElementById('reg-discover-input').value.trim() || document.getElementById('reg-target').value.trim();
+      if (!rawInputs) {
+        showToast('请在左侧或当前框输入至少一个目标网站 URL');
+        return;
+      }
+      const countPerSite = Math.max(1, Number(document.getElementById('reg-count').value || 1));
+      const concurrency = Math.max(1, Number(document.getElementById('reg-concurrency').value || 1));
+      const maxRetries = Math.max(0, Number(document.getElementById('reg-retries').value || 0));
+      const emailProvider = document.getElementById('reg-email-provider').value;
+      const crawlDirectoryPages = document.getElementById('reg-discover-crawl').checked;
+      const savePlatform = document.getElementById('reg-save-platform').checked;
+
+      const btn = document.getElementById('btn-full-pipeline');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/registrar/pipeline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            inputs: rawInputs,
+            countPerSite,
+            concurrency,
+            maxRetries,
+            emailProvider,
+            crawlDirectoryPages,
+            savePlatform,
+            async: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '启动全链路流水线失败');
+        renderJobState(data.job);
+        pollJobUntilDone(data.jobId);
+        showToast('🔥 已启动五阶段全链路流水线任务');
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadCredentialsCenter() {
+      try {
+        const platform = document.getElementById('cred-platform-filter').value.trim();
+        const format = document.getElementById('cred-format').value;
+        const qs = new URLSearchParams({ format });
+        if (platform) qs.set('platform', platform);
+
+        const res = await fetch(`/api/registrar/credentials?${qs.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const bundle = data.bundle || { totalAccounts: 0, totalApiKeys: 0, totalBearerTokens: 0, platforms: {} };
+        latestCredentialText = data.content || '';
+
+        document.getElementById('cred-summary').textContent =
+          `${bundle.totalAccounts} 账号 · ${bundle.totalApiKeys} sk-Key · ${bundle.totalBearerTokens} Token`;
+        const stReg = document.getElementById('st-registrar');
+        stReg.textContent = `2API 凭证池: ${bundle.totalApiKeys} Key / ${bundle.totalAccounts} 账号`;
+        stReg.className = `pill ${bundle.totalAccounts > 0 ? 'ok' : 'warn'}`;
+
+        document.getElementById('cred-preview').textContent =
+          latestCredentialText || '// 暂无凭证数据，请先运行批量注册或流水线';
+
+        const allAccounts = Object.values(bundle.platforms || {}).flatMap((p) => p.accounts || []);
+        const listEl = document.getElementById('cred-account-list');
+        if (!allAccounts.length) {
+          listEl.innerHTML = '<div style="color:var(--text-muted)">暂无已产出的 2API 账号凭证...</div>';
+          return;
+        }
+        listEl.innerHTML = allAccounts.map((a) => {
+          const secretLabel = a.apiKey
+            ? `Key: ${a.apiKey.slice(0, 16)}...`
+            : a.accessToken
+              ? `Token: ${a.accessToken.slice(0, 16)}...`
+              : `Session: ${a.primarySecret.slice(0, 16)}...`;
+          const headersJson = JSON.stringify(a.readyHeaders || {});
+          return `<div class="route-item" style="margin-top:4px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+              <strong>[${esc(a.platformId)}] ${esc(a.email)}</strong>
+              <span class="badge">${esc(a.authType)}</span>
+            </div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--text-secondary);margin-top:3px">
+              ${esc(secretLabel)} ${a.apiBaseUrl ? `· ${esc(a.apiBaseUrl)}` : ''}
+            </div>
+            <div class="btn-row" style="margin-top:5px">
+              <button type="button" class="btn btn-sm" onclick='copyTextToClipboard(${JSON.stringify(a.primarySecret)}, "核心凭证")'>复制 Key/Token</button>
+              <button type="button" class="btn btn-sm" onclick='copyTextToClipboard(${JSON.stringify(headersJson)}, "readyHeaders")'>复制 Headers</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch {}
+    }
+
+    function copyFormattedCredentials() {
+      if (!latestCredentialText) {
+        showToast('暂无可复制的凭证内容');
+        return;
+      }
+      copyTextToClipboard(latestCredentialText, '2API 凭证');
+    }
+
+    function downloadFormattedCredentials() {
+      if (!latestCredentialText) {
+        showToast('暂无可下载的凭证内容');
+        return;
+      }
+      const format = document.getElementById('cred-format').value;
+      const ext = format === 'keys' ? 'txt' : format === 'jsonl' ? 'jsonl' : format === 'env' ? 'env' : 'json';
+      const blob = new Blob([latestCredentialText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `credentials-2api.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast(`已下载 credentials-2api.${ext}`);
+    }
+
+    async function exportAndSyncCredentials() {
+      try {
+        const platform = document.getElementById('cred-platform-filter').value.trim() || undefined;
+        const format = document.getElementById('cred-format').value;
+        const res = await fetch('/api/registrar/credentials/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform, format, syncTfg: true }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || '导出失败');
+        await loadOverview();
+        await loadCredentialsCenter();
+        showToast(`已保存至 ${data.filePath} 并同步 ${data.exportedTfgCount} 个账号到网关！`);
+      } catch (err) {
+        showToast(`错误: ${err.message}`);
+      }
+    }
+
     async function loadOverview() {
       try {
-        const [healthRes, adminRes] = await Promise.all([
-          fetch('/health'),
-          fetch('/api/admin/channels'),
+        const [healthRes, adminRes, regRes] = await Promise.all([
+          fetch('/health').catch(() => null),
+          fetch('/api/admin/channels').catch(() => null),
+          fetch('/api/registrar/status').catch(() => null),
         ]);
-        const health = await healthRes.json();
-        const data = await adminRes.json();
+        const health = healthRes && healthRes.ok ? await healthRes.json() : { models: 0, browser: 'disconnected' };
+        const data = adminRes && adminRes.ok ? await adminRes.json() : { channels: [] };
+        if (regRes && regRes.ok) {
+          const regData = await regRes.json();
+          document.getElementById('discover-count-badge').textContent =
+            `已发现 ${regData.stats?.discoveredCount || 0} 站`;
+        }
 
         const gwEl = document.getElementById('st-gateway');
         gwEl.textContent = '网关状态: 运行中 (' + (data.channels?.length || 0) + ' 渠道 / ' + (health.models || 0) + ' 模型)';
@@ -586,6 +1250,7 @@
     }
 
     loadOverview();
+    loadCredentialsCenter();
   </script>
 </body>
 </html>
