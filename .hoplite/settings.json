@@ -1,0 +1,16 @@
+{
+  "scripts": {
+    "setup": {
+      "command": "cd token-free-gateway && bun install --frozen-lockfile && cd ../universal-registrar && npm ci",
+      "enabled": true
+    },
+    "run": {
+      "command": "cd token-free-gateway && TFG_HOST=0.0.0.0 TFG_PORT=3456 TFG_STORE_PATH=../.hoplite/preview-auth-profiles.json bun run dev",
+      "enabled": true
+    }
+  },
+  "ports": {
+    "preview": 3456
+  },
+  "version": 1
+}
